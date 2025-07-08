@@ -1,0 +1,39 @@
+{
+  "name": "serverless-plugin-template",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "Project template to create serverless plugins",
+  "main": "index.js",
+  "scripts": {
+    "test": "FORCE_COLOR=0 mocha tests --recursive",
+    "lint": "npx eslint --fix .",
+    "format": "npx prettier --write .",
+    "precommit": "pre-commit install && pre-commit install --hook-type commit-msg"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Drafteame/serverless-plugin-template.git"
+  },
+  "keywords": [
+    "serverless",
+    "plugin",
+    "template"
+  ],
+  "author": "Eduardo Aguilar <dante.aguilar41@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Drafteame/serverless-plugin-template/issues"
+  },
+  "homepage": "https://github.com/Drafteame/serverless-plugin-template#readme",
+  "devDependencies": {
+    "chai": "^5.1.1",
+    "chai-as-promised": "^8.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-prettier": "^5.2.1",
+    "mocha": "^10.4.0",
+    "prettier": "^3.3.2",
+    "sinon": "^18.0.0"
+  }
+}
