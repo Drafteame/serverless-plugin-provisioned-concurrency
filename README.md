@@ -8,6 +8,7 @@ provisioned concurrency for specific Lambda versions during deployment and autom
 ## Features
 
 - Set provisioned concurrency for specific Lambda versions
+- Support for both full deployments and single function deployments
 - Automatic cleanup during stack removal
 - Support for multiple functions configuration
 - Flexible version targeting (specific version or latest)
@@ -60,6 +61,26 @@ functions:
       - http:
           path: /api
           method: get
+```
+
+### 3. Deployment options
+
+The plugin supports both full deployments and single function deployments:
+
+#### Full deployment
+
+When you run a full deployment with `serverless deploy`, provisioned concurrency will be set for all configured functions after the stack is updated.
+
+```bash
+serverless deploy
+```
+
+#### Single function deployment
+
+When you deploy a single function with `serverless deploy function`, provisioned concurrency will be set for that function if it's configured:
+
+```bash
+serverless deploy function -f functionName
 ```
 
 ### Complete Example
@@ -187,8 +208,23 @@ Make sure your AWS credentials have the following permissions:
 
 1. Clone the repository
 2. Install dependencies: `npm install`
-3. Run linting: `npm run lint`
-4. Format code: `npm run format`
+3. Build the project: `npm run build`
+4. Run linting: `npm run lint`
+5. Format code: `npm run format`
+
+### TypeScript
+
+This plugin is written in TypeScript for improved type safety and developer experience. The TypeScript source code is compiled to JavaScript during the build process.
+
+- Source code: `src/index.ts`
+- Compiled output: `dist/index.js`
+- Type definitions: `dist/index.d.ts`
+
+To make changes to the plugin:
+
+1. Edit the TypeScript source files
+2. Run `npm run build` to compile
+3. Test your changes
 
 ## Contributing
 

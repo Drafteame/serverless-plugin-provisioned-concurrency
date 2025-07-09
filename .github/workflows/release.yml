@@ -85,7 +85,10 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install
+
+      - name: Build
+        run: npm run build
 
       - name: Publish to NPM
         uses: JS-DevTools/npm-publish@v3
