@@ -23,7 +23,6 @@ class LambdaProvisionedConcurrency {
 
     this.hooks = {
       'after:aws:deploy:deploy:updateStack': this.setProvisionedConcurrency.bind(this),
-      'before:remove:remove': this.removeProvisionedConcurrency.bind(this),
     };
   }
 
@@ -38,14 +37,14 @@ class LambdaProvisionedConcurrency {
         if (this.serverless.cli && this.serverless.cli.log) {
           this.serverless.cli.log(message);
         } else {
-          console.log(message);
+          console.log(message); // eslint-disable-line no-console
         }
       },
       error: (message) => {
         if (this.serverless.cli && this.serverless.cli.log) {
           this.serverless.cli.log(message, 'ERROR');
         } else {
-          console.error(message);
+          console.error(message); // eslint-disable-line no-console
         }
       },
     };
@@ -58,6 +57,7 @@ class LambdaProvisionedConcurrency {
    */
   #createLegacyProgress() {
     return {
+      // eslint-disable-next-line no-unused-vars
       create: (options) => ({
         remove: () => {
           // No-op for v3 compatibility
@@ -65,6 +65,7 @@ class LambdaProvisionedConcurrency {
       }),
     };
   }
+
   /**
    * Main entrypoint to set provisioned concurrency for configured functions
    * @returns {Promise<void>}
@@ -94,34 +95,6 @@ class LambdaProvisionedConcurrency {
   }
 
   /**
-   * Removes provisioned concurrency for all configured functions
-   * @returns {Promise<void>}
-   */
-  async removeProvisionedConcurrency() {
-    const functions = this.#getConfiguredFunctions();
-
-    if (functions.length === 0) {
-      this.#logInfo('No functions configured for provisioned concurrency cleanup');
-      return;
-    }
-
-    const progress = this.progress.create({
-      message: 'Removing provisioned concurrency...',
-    });
-
-    const promises = functions.map((func) => this.#removeFunction(func));
-
-    try {
-      await Promise.all(promises);
-      this.#logInfo('Provisioned concurrency cleanup completed');
-    } catch (error) {
-      this.#logError(`Error removing provisioned concurrency: ${error.message}`);
-    } finally {
-      progress.remove();
-    }
-  }
-
-  /**
    * Processes a single function to set provisioned concurrency
    * @param {Object} func - Function configuration
    * @returns {Promise<void>}
@@ -140,51 +113,11 @@ class LambdaProvisionedConcurrency {
         version = await this.#getLatestVersion(functionName);
       }
 
-      // Check if provisioned concurrency already exists
-      const existingConfig = await this.#getProvisionedConcurrencyConfig(functionName, version);
-
-      if (existingConfig) {
-        // Update existing configuration
-        await this.#updateProvisionedConcurrency(functionName, version, config.concurrency);
-        this.#logInfo(`Updated provisioned concurrency for ${functionName}:${version} to ${config.concurrency}`);
-      } else {
-        // Create new configuration
-        await this.#createProvisionedConcurrency(functionName, version, config.concurrency);
-        this.#logInfo(`Set provisioned concurrency for ${functionName}:${version} to ${config.concurrency}`);
-      }
+      this.#logInfo(`Setting provisioned concurrency for ${functionName}:${version} to ${config.concurrency}`);
+      await this.#setProvisionedConcurrency(functionName, version, config.concurrency);
     } catch (error) {
       this.#logError(`Error processing function ${name}: ${error.message}`);
       throw error;
-    }
-  }
-
-  /**
-   * Removes provisioned concurrency for a single function
-   * @param {Object} func - Function configuration
-   * @returns {Promise<void>}
-   * @private
-   */
-  async #removeFunction(func) {
-    const { name, config } = func;
-    const functionName = this.#getFunctionName(name);
-
-    try {
-      let version = config.version;
-
-      if (!version || version === 'latest') {
-        version = await this.#getLatestVersion(functionName);
-      }
-
-      const existingConfig = await this.#getProvisionedConcurrencyConfig(functionName, version);
-
-      if (existingConfig) {
-        await this.#deleteProvisionedConcurrency(functionName, version);
-        this.#logInfo(`Removed provisioned concurrency for ${functionName}:${version}`);
-      } else {
-        this.#logInfo(`No provisioned concurrency found for ${functionName}:${version}`);
-      }
-    } catch (error) {
-      this.#logError(`Error removing provisioned concurrency for ${name}: ${error.message}`);
     }
   }
 
@@ -225,45 +158,6 @@ class LambdaProvisionedConcurrency {
   }
 
   /**
-   * Gets existing provisioned concurrency configuration
-   * @param {string} functionName - Function name
-   * @param {string} version - Function version
-   * @returns {Promise<Object|null>}
-   * @private
-   */
-  async #getProvisionedConcurrencyConfig(functionName, version) {
-    try {
-      return await this.provider.request('Lambda', 'getProvisionedConcurrencyConfig', {
-        FunctionName: functionName,
-        Qualifier: version,
-      });
-    } catch (error) {
-      if (error.code === 'ProvisionedConcurrencyConfigNotFoundException') {
-        return null;
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Creates provisioned concurrency configuration
-   * @param {string} functionName - Function name
-   * @param {string} version - Function version
-   * @param {number} concurrency - Provisioned concurrency value
-   * @returns {Promise<void>}
-   * @private
-   */
-  async #createProvisionedConcurrency(functionName, version, concurrency) {
-    await this.provider.request('Lambda', 'putProvisionedConcurrencyConfig', {
-      FunctionName: functionName,
-      Qualifier: version,
-      ProvisionedConcurrencyConfig: {
-        ProvisionedConcurrentExecutions: concurrency,
-      },
-    });
-  }
-
-  /**
    * Updates provisioned concurrency configuration
    * @param {string} functionName - Function name
    * @param {string} version - Function version
@@ -271,27 +165,12 @@ class LambdaProvisionedConcurrency {
    * @returns {Promise<void>}
    * @private
    */
-  async #updateProvisionedConcurrency(functionName, version, concurrency) {
+  async #setProvisionedConcurrency(functionName, version, concurrency) {
+    this.#logInfo('updating provisioned concurrency');
     await this.provider.request('Lambda', 'putProvisionedConcurrencyConfig', {
       FunctionName: functionName,
       Qualifier: version,
-      ProvisionedConcurrencyConfig: {
-        ProvisionedConcurrentExecutions: concurrency,
-      },
-    });
-  }
-
-  /**
-   * Deletes provisioned concurrency configuration
-   * @param {string} functionName - Function name
-   * @param {string} version - Function version
-   * @returns {Promise<void>}
-   * @private
-   */
-  async #deleteProvisionedConcurrency(functionName, version) {
-    await this.provider.request('Lambda', 'deleteProvisionedConcurrencyConfig', {
-      FunctionName: functionName,
-      Qualifier: version,
+      ProvisionedConcurrentExecutions: concurrency,
     });
   }
 
@@ -304,7 +183,7 @@ class LambdaProvisionedConcurrency {
     const functions = this.serverless.service.functions || {};
 
     return Object.entries(functions)
-      .filter(([_, functionConfig]) => functionConfig.concurrency?.provisioned)
+      .filter(([_, functionConfig]) => functionConfig.concurrency?.provisioned) // eslint-disable-line no-unused-vars
       .map(([name, functionConfig]) => ({
         name,
         config: this.#normalizeConfig(functionConfig.concurrency),

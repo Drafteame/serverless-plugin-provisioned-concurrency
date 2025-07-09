@@ -6,10 +6,10 @@ on:
       - main
 
 env:
-  GIT_USER_EMAIL: '' # ${{ secrets.GIT_EMAIL }}
-  GIT_USER_NAME: '' # ${{ secrets.GIT_NAME }}
-  ACCESS_TOKEN: '' # ${{ secrets.ACCESS_TOKEN }}
-  NPM_ACCESS_TOKEN: '' # ${{ secrets.NPM_ACCESS_TOKEN }}
+  GIT_USER_EMAIL: ${{ secrets.GIT_EMAIL }}
+  GIT_USER_NAME: ${{ secrets.GIT_NAME }}
+  ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+  NPM_ACCESS_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
 
 permissions:
   contents: write
