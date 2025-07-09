@@ -48,8 +48,17 @@ jobs:
           export REV=`cz version --project`
           echo "version=\"v$REV\"" >> $GITHUB_OUTPUT
 
+      - name: Check access token
+        id: check_token
+        run: |
+          if [[ -n "$ACCESS_TOKEN" ]]; then
+            echo "continue=true" >> $GITHUB_OUTPUT
+          else
+            echo "continue=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Push changes
-        if: ${{ env.ACCESS_TOKEN != '' }}
+        if: steps.check_token.outputs.continue == 'true'
         uses: ad-m/github-push-action@v0.8.0
         with:
           github_token: ${{ env.ACCESS_TOKEN }}
@@ -64,11 +73,22 @@ jobs:
   npm_publish:
     name: Publish to NPM
     runs-on: ubuntu-latest
-    if: ${{ env.NPM_ACCESS_TOKEN != '' && env.ACCESS_TOKEN != '' }}
+    if: success()
     needs:
       - bump_version
     steps:
+      - name: Check environment variables
+        id: check_env
+        run: |
+          if [[ -n "$NPM_ACCESS_TOKEN" && -n "$ACCESS_TOKEN" ]]; then
+            echo "continue=true" >> $GITHUB_OUTPUT
+          else
+            echo "continue=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
       - name: Checkout
+        if: steps.check_env.outputs.continue == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -76,14 +96,17 @@ jobs:
           ref: main
 
       - name: Setup NodeJS with cache
+        if: steps.check_env.outputs.continue == 'true'
         uses: Drafteame/node-cache-action@main
         with:
           node-version: '20'
 
       - name: Install dependencies
+        if: steps.check_env.outputs.continue == 'true'
         run: npm install
 
       - name: Publish to NPM
+        if: steps.check_env.outputs.continue == 'true'
         uses: JS-DevTools/npm-publish@v3
         with:
           token: ${{ env.NPM_ACCESS_TOKEN }}
