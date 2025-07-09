@@ -46,6 +46,11 @@ jobs:
           export REV=`cz version --project`
           echo "version=\"v$REV\"" >> $GITHUB_OUTPUT
 
+      - name: Check and fix package.json version
+        run: |
+          chmod +x ./scripts/check-version.sh
+          ./scripts/check-version.sh
+
       - name: Push changes
         uses: ad-m/github-push-action@v0.8.0
         with:
