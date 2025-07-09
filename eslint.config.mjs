@@ -1,3 +1,5 @@
+// @ts-check
+// Force this file to be treated as an ESM module
 import imp from 'eslint-plugin-import';
 import prettier from 'eslint-plugin-prettier';
 import tsPlugin from '@typescript-eslint/eslint-plugin';

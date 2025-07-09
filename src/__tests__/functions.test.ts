@@ -43,11 +43,7 @@ describe('Function processing methods', () => {
 
   describe('_getConfiguredFunctions', () => {
     it('should return empty array when no functions are configured', () => {
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
       const functions = plugin._getConfiguredFunctions();
@@ -75,11 +71,7 @@ describe('Function processing methods', () => {
         },
       };
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
       const functions = plugin._getConfiguredFunctions();
@@ -104,11 +96,7 @@ describe('Function processing methods', () => {
     it('should process function with specific version', async () => {
       const mockProvider = mockServerless.getProvider();
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       const functionConfig = {
         name: 'myFunction',
@@ -127,15 +115,11 @@ describe('Function processing methods', () => {
       );
 
       // Should call provider.request with correct parameters
-      expect(mockProvider.request).toHaveBeenCalledWith(
-        'Lambda',
-        'putProvisionedConcurrencyConfig',
-        {
-          FunctionName: 'test-service-test-myFunction',
-          Qualifier: '2',
-          ProvisionedConcurrentExecutions: 10,
-        }
-      );
+      expect(mockProvider.request).toHaveBeenCalledWith('Lambda', 'putProvisionedConcurrencyConfig', {
+        FunctionName: 'test-service-test-myFunction',
+        Qualifier: '2',
+        ProvisionedConcurrentExecutions: 10,
+      });
     });
 
     it('should get latest version when no version specified', async () => {
@@ -145,22 +129,13 @@ describe('Function processing methods', () => {
       mockProvider.request.mockImplementation((_service: string, method: string, _params: any) => {
         if (method === 'listVersionsByFunction') {
           return Promise.resolve({
-            Versions: [
-              { Version: '$LATEST' },
-              { Version: '1' },
-              { Version: '2' },
-              { Version: '3' },
-            ],
+            Versions: [{ Version: '$LATEST' }, { Version: '1' }, { Version: '2' }, { Version: '3' }],
           });
         }
         return Promise.resolve({});
       });
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       const functionConfig = {
         name: 'myFunction',
@@ -174,14 +149,10 @@ describe('Function processing methods', () => {
       await plugin._processFunction(functionConfig);
 
       // Should call provider.request to get versions
-      expect(mockProvider.request).toHaveBeenCalledWith(
-        'Lambda',
-        'listVersionsByFunction',
-        {
-          FunctionName: 'test-service-test-myFunction',
-          MaxItems: 50,
-        }
-      );
+      expect(mockProvider.request).toHaveBeenCalledWith('Lambda', 'listVersionsByFunction', {
+        FunctionName: 'test-service-test-myFunction',
+        MaxItems: 50,
+      });
 
       // Should log the action with the latest version
       expect(mockUtils.log.info).toHaveBeenCalledWith(
@@ -189,15 +160,11 @@ describe('Function processing methods', () => {
       );
 
       // Should call provider.request with correct parameters
-      expect(mockProvider.request).toHaveBeenCalledWith(
-        'Lambda',
-        'putProvisionedConcurrencyConfig',
-        {
-          FunctionName: 'test-service-test-myFunction',
-          Qualifier: '3',
-          ProvisionedConcurrentExecutions: 10,
-        }
-      );
+      expect(mockProvider.request).toHaveBeenCalledWith('Lambda', 'putProvisionedConcurrencyConfig', {
+        FunctionName: 'test-service-test-myFunction',
+        Qualifier: '3',
+        ProvisionedConcurrentExecutions: 10,
+      });
     });
 
     it('should get latest version when "latest" is specified', async () => {
@@ -207,22 +174,13 @@ describe('Function processing methods', () => {
       mockProvider.request.mockImplementation((_service: string, method: string, _params: any) => {
         if (method === 'listVersionsByFunction') {
           return Promise.resolve({
-            Versions: [
-              { Version: '$LATEST' },
-              { Version: '1' },
-              { Version: '2' },
-              { Version: '3' },
-            ],
+            Versions: [{ Version: '$LATEST' }, { Version: '1' }, { Version: '2' }, { Version: '3' }],
           });
         }
         return Promise.resolve({});
       });
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       const functionConfig = {
         name: 'myFunction',
@@ -236,14 +194,10 @@ describe('Function processing methods', () => {
       await plugin._processFunction(functionConfig);
 
       // Should call provider.request to get versions
-      expect(mockProvider.request).toHaveBeenCalledWith(
-        'Lambda',
-        'listVersionsByFunction',
-        {
-          FunctionName: 'test-service-test-myFunction',
-          MaxItems: 50,
-        }
-      );
+      expect(mockProvider.request).toHaveBeenCalledWith('Lambda', 'listVersionsByFunction', {
+        FunctionName: 'test-service-test-myFunction',
+        MaxItems: 50,
+      });
 
       // Should log the action with the latest version
       expect(mockUtils.log.info).toHaveBeenCalledWith(
@@ -257,11 +211,7 @@ describe('Function processing methods', () => {
       // Mock the provider.request to throw an error
       mockProvider.request.mockRejectedValue(new Error('API error'));
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       const functionConfig = {
         name: 'myFunction',
@@ -272,9 +222,7 @@ describe('Function processing methods', () => {
       };
 
       // @ts-ignore - Accessing private method for testing
-      await expect(plugin._processFunction(functionConfig))
-        .rejects
-        .toThrow('API error');
+      await expect(plugin._processFunction(functionConfig)).rejects.toThrow('API error');
 
       // Should log the error
       expect(mockUtils.log.error).toHaveBeenCalledWith(

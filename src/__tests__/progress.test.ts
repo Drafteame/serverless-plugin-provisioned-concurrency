@@ -65,11 +65,7 @@ describe('Progress methods', () => {
         },
       };
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // Trigger a method that uses progress
       await plugin.setProvisionedConcurrency();
@@ -96,11 +92,7 @@ describe('Progress methods', () => {
         },
       };
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // Trigger a method that uses progress
       await plugin.setProvisionedConcurrency();
@@ -130,11 +122,7 @@ describe('Progress methods', () => {
       };
       mockServerless.getProvider.mockReturnValue(mockProvider);
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // Trigger a method that uses progress and will encounter an error
       await plugin.setProvisionedConcurrency();

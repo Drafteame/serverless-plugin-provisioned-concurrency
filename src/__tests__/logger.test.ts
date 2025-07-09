@@ -60,22 +60,20 @@ describe('Logger methods', () => {
   describe('Serverless v3 logging', () => {
     it('should log info message using CLI when available', () => {
       const plugin = new ProvisionedConcurrency(mockServerlessWithCli as any, mockOptions as any);
-      
+
       // @ts-ignore - Accessing private method for testing
       plugin._logInfo('Test info message');
-      
-      expect(mockServerlessWithCli.cli.log).toHaveBeenCalledWith(
-        'Provisioned Concurrency: Test info message'
-      );
+
+      expect(mockServerlessWithCli.cli.log).toHaveBeenCalledWith('Provisioned Concurrency: Test info message');
       expect(consoleLogSpy).not.toHaveBeenCalled();
     });
 
     it('should log error message using CLI when available', () => {
       const plugin = new ProvisionedConcurrency(mockServerlessWithCli as any, mockOptions as any);
-      
+
       // @ts-ignore - Accessing private method for testing
       plugin._logError('Test error message');
-      
+
       expect(mockServerlessWithCli.cli.log).toHaveBeenCalledWith(
         'Provisioned Concurrency: Test error message',
         'ERROR'
@@ -85,58 +83,42 @@ describe('Logger methods', () => {
 
     it('should log info message using console when CLI not available', () => {
       const plugin = new ProvisionedConcurrency(mockServerlessWithoutCli as any, mockOptions as any);
-      
+
       // @ts-ignore - Accessing private method for testing
       plugin._logInfo('Test info message');
-      
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        'Provisioned Concurrency: Test info message'
-      );
+
+      expect(consoleLogSpy).toHaveBeenCalledWith('Provisioned Concurrency: Test info message');
     });
 
     it('should log error message using console when CLI not available', () => {
       const plugin = new ProvisionedConcurrency(mockServerlessWithoutCli as any, mockOptions as any);
-      
+
       // @ts-ignore - Accessing private method for testing
       plugin._logError('Test error message');
-      
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Provisioned Concurrency: Test error message'
-      );
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Provisioned Concurrency: Test error message');
     });
   });
 
   describe('Serverless v4 logging', () => {
     it('should log info message using utils.log', () => {
-      const plugin = new ProvisionedConcurrency(
-        mockServerlessWithCli as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
-      
+      const plugin = new ProvisionedConcurrency(mockServerlessWithCli as any, mockOptions as any, mockUtils as any);
+
       // @ts-ignore - Accessing private method for testing
       plugin._logInfo('Test info message');
-      
-      expect(mockUtils.log.info).toHaveBeenCalledWith(
-        'Provisioned Concurrency: Test info message'
-      );
+
+      expect(mockUtils.log.info).toHaveBeenCalledWith('Provisioned Concurrency: Test info message');
       expect(mockServerlessWithCli.cli.log).not.toHaveBeenCalled();
       expect(consoleLogSpy).not.toHaveBeenCalled();
     });
 
     it('should log error message using utils.log', () => {
-      const plugin = new ProvisionedConcurrency(
-        mockServerlessWithCli as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
-      
+      const plugin = new ProvisionedConcurrency(mockServerlessWithCli as any, mockOptions as any, mockUtils as any);
+
       // @ts-ignore - Accessing private method for testing
       plugin._logError('Test error message');
-      
-      expect(mockUtils.log.error).toHaveBeenCalledWith(
-        'Provisioned Concurrency: Test error message'
-      );
+
+      expect(mockUtils.log.error).toHaveBeenCalledWith('Provisioned Concurrency: Test error message');
       expect(mockServerlessWithCli.cli.log).not.toHaveBeenCalled();
       expect(consoleErrorSpy).not.toHaveBeenCalled();
     });

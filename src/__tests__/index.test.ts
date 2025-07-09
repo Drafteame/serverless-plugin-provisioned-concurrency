@@ -64,11 +64,7 @@ describe('ProvisionedConcurrency', () => {
     });
 
     it('should initialize with Serverless v4', () => {
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       expect(plugin).toBeDefined();
       expect(mockServerless.getProvider).toHaveBeenCalledWith('aws');
@@ -79,11 +75,7 @@ describe('ProvisionedConcurrency', () => {
 
   describe('setProvisionedConcurrency', () => {
     it('should do nothing when no functions are configured', async () => {
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       await plugin.setProvisionedConcurrency();
 
@@ -116,22 +108,13 @@ describe('ProvisionedConcurrency', () => {
       mockProvider.request.mockImplementation((_service: string, method: string, _params: any) => {
         if (method === 'listVersionsByFunction') {
           return Promise.resolve({
-            Versions: [
-              { Version: '$LATEST' },
-              { Version: '1' },
-              { Version: '2' },
-              { Version: '3' },
-            ],
+            Versions: [{ Version: '$LATEST' }, { Version: '1' }, { Version: '2' }, { Version: '3' }],
           });
         }
         return Promise.resolve({});
       });
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       await plugin.setProvisionedConcurrency();
 
@@ -169,11 +152,7 @@ describe('ProvisionedConcurrency', () => {
       // Mock the provider.request to throw an error
       mockProvider.request.mockRejectedValue(new Error('API error'));
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       await plugin.setProvisionedConcurrency();
 
@@ -190,16 +169,14 @@ describe('ProvisionedConcurrency', () => {
   describe('setProvisionedConcurrencyForFunction', () => {
     it('should do nothing when function name is not provided', async () => {
       const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
+        mockServerless as any,
         {} as any, // Empty options
         mockUtils as any
       );
 
       await plugin.setProvisionedConcurrencyForFunction();
 
-      expect(mockUtils.log.error).toHaveBeenCalledWith(
-        'Provisioned Concurrency: Function name not provided'
-      );
+      expect(mockUtils.log.error).toHaveBeenCalledWith('Provisioned Concurrency: Function name not provided');
       expect(mockUtils.progress.create).not.toHaveBeenCalled();
     });
 
@@ -210,7 +187,7 @@ describe('ProvisionedConcurrency', () => {
       };
 
       const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
+        mockServerless as any,
         { function: 'func1' } as any, // Function name in options
         mockUtils as any
       );
@@ -237,7 +214,7 @@ describe('ProvisionedConcurrency', () => {
       const mockProvider = mockServerless.getProvider();
 
       const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
+        mockServerless as any,
         { function: 'func1' } as any, // Function name in options
         mockUtils as any
       );
@@ -251,8 +228,8 @@ describe('ProvisionedConcurrency', () => {
 
       // Should call provider.request for the function
       expect(mockProvider.request).toHaveBeenCalledWith(
-        'Lambda', 
-        'putProvisionedConcurrencyConfig', 
+        'Lambda',
+        'putProvisionedConcurrencyConfig',
         expect.objectContaining({
           FunctionName: 'test-service-test-func1',
           Qualifier: '2',
@@ -266,9 +243,7 @@ describe('ProvisionedConcurrency', () => {
       );
 
       // Should log updating
-      expect(mockUtils.log.info).toHaveBeenCalledWith(
-        'Provisioned Concurrency: updating provisioned concurrency'
-      );
+      expect(mockUtils.log.info).toHaveBeenCalledWith('Provisioned Concurrency: updating provisioned concurrency');
     });
 
     it('should handle errors during processing', async () => {
@@ -287,7 +262,7 @@ describe('ProvisionedConcurrency', () => {
       mockProvider.request.mockRejectedValue(new Error('API error'));
 
       const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
+        mockServerless as any,
         { function: 'func1' } as any, // Function name in options
         mockUtils as any
       );
@@ -310,32 +285,19 @@ describe('ProvisionedConcurrency', () => {
 
       // Mock the provider.request for listVersionsByFunction
       mockProvider.request.mockResolvedValue({
-        Versions: [
-          { Version: '$LATEST' },
-          { Version: '1' },
-          { Version: '2' },
-          { Version: '3' },
-        ],
+        Versions: [{ Version: '$LATEST' }, { Version: '1' }, { Version: '2' }, { Version: '3' }],
       });
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
       const version = await plugin._getLatestVersion('test-function');
 
       expect(version).toBe('3');
-      expect(mockProvider.request).toHaveBeenCalledWith(
-        'Lambda', 
-        'listVersionsByFunction', 
-        {
-          FunctionName: 'test-function',
-          MaxItems: 50,
-        }
-      );
+      expect(mockProvider.request).toHaveBeenCalledWith('Lambda', 'listVersionsByFunction', {
+        FunctionName: 'test-function',
+        MaxItems: 50,
+      });
     });
 
     it('should throw error when no versions are found', async () => {
@@ -346,16 +308,12 @@ describe('ProvisionedConcurrency', () => {
         Versions: [],
       });
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
-      await expect(plugin._getLatestVersion('test-function'))
-        .rejects
-        .toThrow('No versions found for function test-function');
+      await expect(plugin._getLatestVersion('test-function')).rejects.toThrow(
+        'No versions found for function test-function'
+      );
     });
 
     it('should throw error when only $LATEST version exists', async () => {
@@ -363,21 +321,15 @@ describe('ProvisionedConcurrency', () => {
 
       // Mock the provider.request to return only $LATEST
       mockProvider.request.mockResolvedValue({
-        Versions: [
-          { Version: '$LATEST' },
-        ],
+        Versions: [{ Version: '$LATEST' }],
       });
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
-      await expect(plugin._getLatestVersion('test-function'))
-        .rejects
-        .toThrow('No numbered versions found for function test-function');
+      await expect(plugin._getLatestVersion('test-function')).rejects.toThrow(
+        'No numbered versions found for function test-function'
+      );
     });
 
     it('should handle API errors', async () => {
@@ -386,26 +338,18 @@ describe('ProvisionedConcurrency', () => {
       // Mock the provider.request to throw an error
       mockProvider.request.mockRejectedValue(new Error('API error'));
 
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
-      await expect(plugin._getLatestVersion('test-function'))
-        .rejects
-        .toThrow('Error getting latest version for test-function: API error');
+      await expect(plugin._getLatestVersion('test-function')).rejects.toThrow(
+        'Error getting latest version for test-function: API error'
+      );
     });
   });
 
   describe('_normalizeConfig', () => {
     it('should normalize config with defaults', () => {
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
       const normalized = plugin._normalizeConfig({
@@ -419,11 +363,7 @@ describe('ProvisionedConcurrency', () => {
     });
 
     it('should normalize config with version', () => {
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
       const normalized = plugin._normalizeConfig({
@@ -438,11 +378,7 @@ describe('ProvisionedConcurrency', () => {
     });
 
     it('should handle undefined config', () => {
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
       const normalized = plugin._normalizeConfig(undefined);
@@ -456,11 +392,7 @@ describe('ProvisionedConcurrency', () => {
 
   describe('_getFunctionName', () => {
     it('should return the full function name', () => {
-      const plugin = new ProvisionedConcurrency(
-        mockServerless as any, 
-        mockOptions as any, 
-        mockUtils as any
-      );
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
       const fullName = plugin._getFunctionName('myFunction');

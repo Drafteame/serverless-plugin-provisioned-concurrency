@@ -1,6 +1,6 @@
 // Mock implementation of p-limit
-module.exports = function pLimit(concurrency) {
+export default function pLimit(_concurrency) {
   return function limit(fn) {
     return fn();
   };
-};
+}
