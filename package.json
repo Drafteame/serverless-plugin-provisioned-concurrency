@@ -1,6 +1,6 @@
 {
   "name": "serverless-plugin-provisioned-concurrency",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "A serverless plugin that manages provisioned concurrency for Lambda functions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
