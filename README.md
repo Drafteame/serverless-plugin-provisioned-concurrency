@@ -1,6 +1,6 @@
 # Serverless Plugin Lambda Provisioned Concurrency
 
-A serverless plugin that manages provisioned concurrency for AWS Lambda functions. This plugin allows you to set 
+A serverless plugin that manages provisioned concurrency for AWS Lambda functions. This plugin allows you to set
 provisioned concurrency for specific Lambda versions during deployment and automatically clean it up during removal.
 
 **Compatible with Serverless Framework v3 and v4**
@@ -16,6 +16,7 @@ provisioned concurrency for specific Lambda versions during deployment and autom
 ## Compatibility
 
 This plugin is compatible with:
+
 - **Serverless Framework v3.x**
 - **Serverless Framework v4.x**
 
@@ -46,15 +47,15 @@ functions:
     handler: src/processor.handler
     concurrency:
       provisioned: 10
-      version: '3'  # optional - uses latest if not specified
+      version: '3' # optional - uses latest if not specified
     events:
       - sqs:
           arn: arn:aws:sqs:us-east-1:123456789012:my-queue
-  
+
   api:
     handler: src/api.handler
     concurrency:
-      provisioned: 5  # uses latest version
+      provisioned: 5 # uses latest version
     events:
       - http:
           path: /api
@@ -79,17 +80,17 @@ functions:
   api:
     handler: src/api.handler
     concurrency:
-      provisioned: 10  # Uses latest version
+      provisioned: 10 # Uses latest version
     events:
       - http:
           path: /api
           method: get
-  
+
   processor:
     handler: src/processor.handler
     concurrency:
       provisioned: 5
-      version: '3'  # Uses specific version 3
+      version: '3' # Uses specific version 3
     events:
       - sqs:
           arn: arn:aws:sqs:us-east-1:123456789012:my-queue
@@ -101,10 +102,10 @@ functions:
 
 Each function can include a `concurrency` section with the following options:
 
-| Option | Type | Required | Default | Description |
-|--------|------|----------|---------|-------------|
-| `provisioned` | number | Yes | - | The number of provisioned concurrency units |
-| `version` | string | No | latest | The Lambda version to configure (use specific version number or omit for latest) |
+| Option        | Type   | Required | Default | Description                                                                      |
+| ------------- | ------ | -------- | ------- | -------------------------------------------------------------------------------- |
+| `provisioned` | number | Yes      | -       | The number of provisioned concurrency units                                      |
+| `version`     | string | No       | latest  | The Lambda version to configure (use specific version number or omit for latest) |
 
 ### Configuration Format
 
@@ -113,8 +114,8 @@ functions:
   myFunction:
     handler: src/handler.js
     concurrency:
-      provisioned: 10    # Required - number of concurrent executions
-      version: '2'       # Optional - specific version (defaults to latest)
+      provisioned: 10 # Required - number of concurrent executions
+      version: '2' # Optional - specific version (defaults to latest)
 ```
 
 ### Short Form Configuration
@@ -126,7 +127,7 @@ functions:
   myFunction:
     handler: src/handler.js
     concurrency:
-      provisioned: 10  # Uses latest version
+      provisioned: 10 # Uses latest version
 ```
 
 ## How It Works
