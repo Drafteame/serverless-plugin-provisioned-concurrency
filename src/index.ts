@@ -145,8 +145,6 @@ class ProvisionedConcurrency {
    */
   private _createLegacyLogger(): Logger {
     return {
-  private _createLegacyLogger(): Logger {
-    return {
       info: (message: string) => {
         if (this.serverless.cli?.log) {
           this.serverless.cli.log(message);
@@ -161,8 +159,6 @@ class ProvisionedConcurrency {
           console.error(message); // eslint-disable-line no-console
         }
       },
-    };
-  }
     };
   }
 
