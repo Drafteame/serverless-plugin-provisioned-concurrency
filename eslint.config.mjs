@@ -26,7 +26,7 @@ export default [
       'import/prefer-default-export': 'off',
       'no-console': 'warn',
       'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': ['warn', { 'argsIgnorePattern': '^_' }],
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'prettier/prettier': 'error', // Ensures that Prettier issues are flagged as errors
     },
   },
