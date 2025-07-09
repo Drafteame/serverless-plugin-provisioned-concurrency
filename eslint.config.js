@@ -1,7 +1,7 @@
-const imp = require('eslint-plugin-import');
-const prettier = require('eslint-plugin-prettier');
+import imp from 'eslint-plugin-import';
+import prettier from 'eslint-plugin-prettier';
 
-module.exports = [
+export default [
   {
     files: ['**/*.js'],
     plugins: {
