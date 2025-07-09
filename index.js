@@ -3,6 +3,9 @@
  * for Lambda functions. It can set/update provisioned concurrency during deployment and
  * clean it up during removal.
  */
+const pLimit = require('p-limit');
+const os = require('os');
+
 class LambdaProvisionedConcurrency {
   constructor(serverless, options, utils) {
     this.serverless = serverless;
@@ -82,9 +85,18 @@ class LambdaProvisionedConcurrency {
       message: 'Setting provisioned concurrency...',
     });
 
-    const promises = functions.map((func) => this.#processFunction(func));
+    // Get the number of available CPUs for concurrency limit
+    const cpuCount = os.cpus().length;
+    this.#logInfo(`Using concurrency limit of ${cpuCount} (based on available CPUs)`);
 
     try {
+      // Create a limit function with concurrency based on CPU count
+      const limit = pLimit(cpuCount);
+
+      // Map each function to a limited promise
+      const promises = functions.map((func) => limit(() => this.#processFunction(func)));
+
+      // Wait for all promises to complete
       await Promise.all(promises);
       this.#logInfo('Provisioned concurrency configuration completed');
     } catch (error) {
