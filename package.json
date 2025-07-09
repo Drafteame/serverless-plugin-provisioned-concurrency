@@ -1,39 +1,48 @@
 {
-  "name": "serverless-plugin-template",
-  "type": "module",
+  "name": "serverless-plugin-provisioned-concurrency",
   "version": "0.0.0",
-  "description": "Project template to create serverless plugins",
+  "description": "A serverless plugin that manages provisioned concurrency for Lambda functions",
   "main": "index.js",
-  "scripts": {
-    "test": "FORCE_COLOR=0 mocha tests --recursive",
-    "lint": "npx eslint --fix .",
-    "format": "npx prettier --write .",
-    "precommit": "pre-commit install && pre-commit install --hook-type commit-msg"
-  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Drafteame/serverless-plugin-template.git"
+    "url": "git+https://github.com/Drafteame/serverless-plugin-provisioned-concurrency.git"
   },
   "keywords": [
     "serverless",
     "plugin",
-    "template"
+    "lambda",
+    "aws",
+    "provisioned-concurrency",
+    "performance"
   ],
-  "author": "Eduardo Aguilar <dante.aguilar41@gmail.com>",
+  "author": "Draftea Platform <platform@draftea.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Drafteame/serverless-plugin-template/issues"
+    "url": "https://github.com/Drafteame/serverless-plugin-provisioned-concurrency/issues"
   },
-  "homepage": "https://github.com/Drafteame/serverless-plugin-template#readme",
+  "homepage": "https://github.com/Drafteame/serverless-plugin-provisioned-concurrency#readme",
+  "peerDependencies": {
+    "serverless": ">=3.0.0"
+  },
+  "files": [
+    "index.js",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "lint": "npx eslint --fix .",
+    "format": "npx prettier --write .",
+    "pre-commit": "pre-commit install && pre-commit install --hook-type commit-msg"
+  },
   "devDependencies": {
-    "chai": "^5.1.1",
-    "chai-as-promised": "^8.0.0",
-    "eslint": "^8.57.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-import": "^2.29.1",
-    "eslint-plugin-prettier": "^5.2.1",
-    "mocha": "^10.4.0",
-    "prettier": "^3.3.2",
-    "sinon": "^18.0.0"
+    "chai": "^5.2.1",
+    "chai-as-promised": "^8.0.1",
+    "eslint": "^9.30.1",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-prettier": "^5.5.1",
+    "mocha": "^11.7.1",
+    "prettier": "^3.6.2",
+    "sinon": "^21.0.0"
   }
 }
