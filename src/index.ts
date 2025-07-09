@@ -145,20 +145,24 @@ class ProvisionedConcurrency {
    */
   private _createLegacyLogger(): Logger {
     return {
+  private _createLegacyLogger(): Logger {
+    return {
       info: (message: string) => {
-        if (this.serverless.cli && this.serverless.cli.log) {
+        if (this.serverless.cli?.log) {
           this.serverless.cli.log(message);
         } else {
           console.log(message); // eslint-disable-line no-console
         }
       },
       error: (message: string) => {
-        if (this.serverless.cli && this.serverless.cli.log) {
+        if (this.serverless.cli?.log) {
           this.serverless.cli.log(message, 'ERROR');
         } else {
           console.error(message); // eslint-disable-line no-console
         }
       },
+    };
+  }
     };
   }
 
