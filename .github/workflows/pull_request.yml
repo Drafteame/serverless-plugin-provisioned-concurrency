@@ -22,23 +22,41 @@ jobs:
       - name: Lint
         run: npm run lint
 
-  #  test:
-  #    name: Test
-  #    runs-on: ubuntu-latest
-  #    steps:
-  #      - name: Checkout
-  #        uses: actions/checkout@v4
-  #
-  #      - name: Setup NodeJS with cache
-  #        uses: Drafteame/node-cache-action@main
-  #        with:
-  #          node-version: '20'
-  #
-  #      - name: Install dependencies
-  #        run: npm install
-  #
-  #      - name: Test
-  #        run: npm run test
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup NodeJS with cache
+        uses: Drafteame/node-cache-action@main
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup NodeJS with cache
+        uses: Drafteame/node-cache-action@main
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Test
+        run: npm run test
 
   commit_lint:
     runs-on: ubuntu-latest
