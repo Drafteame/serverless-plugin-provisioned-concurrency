@@ -49,7 +49,7 @@ jobs:
           echo "version=\"v$REV\"" >> $GITHUB_OUTPUT
 
       - name: Push changes
-        if: env.ACCESS_TOKEN != ''
+        if: ${{ env.ACCESS_TOKEN != '' }}
         uses: ad-m/github-push-action@v0.8.0
         with:
           github_token: ${{ env.ACCESS_TOKEN }}
@@ -64,7 +64,7 @@ jobs:
   npm_publish:
     name: Publish to NPM
     runs-on: ubuntu-latest
-    if: env.NPM_ACCESS_TOKEN != '' && env.ACCESS_TOKEN != ''
+    if: ${{ env.NPM_ACCESS_TOKEN != '' && env.ACCESS_TOKEN != '' }}
     needs:
       - bump_version
     steps:
