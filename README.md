@@ -12,6 +12,7 @@ provisioned concurrency for specific Lambda versions during deployment and autom
 - Automatic cleanup during stack removal
 - Support for multiple functions configuration
 - Flexible version targeting (specific version or latest)
+- Automatic management of provisioned concurrency across versions (only one version per function can have provisioned concurrency)
 - Error handling and logging
 
 ## Compatibility
@@ -155,6 +156,10 @@ functions:
 
 1. **During Deployment**: The plugin runs after the stack is updated and sets provisioned concurrency for the configured functions
 2. **During Removal**: The plugin runs before stack removal and cleans up all provisioned concurrency configurations
+3. **Version Management**: The plugin ensures only one version of a function has provisioned concurrency:
+   - When setting provisioned concurrency for a version, the plugin first checks if other versions already have provisioned concurrency
+   - If other versions with provisioned concurrency are found, the plugin automatically removes their provisioned concurrency before setting it for the new version
+   - This prevents having multiple versions with provisioned concurrency, which can lead to unexpected costs
 
 ## Plugin Lifecycle
 
@@ -189,6 +194,7 @@ Make sure your AWS credentials have the following permissions:
         "lambda:GetProvisionedConcurrencyConfig",
         "lambda:PutProvisionedConcurrencyConfig",
         "lambda:DeleteProvisionedConcurrencyConfig",
+        "lambda:ListProvisionedConcurrencyConfigs",
         "lambda:ListVersionsByFunction"
       ],
       "Resource": "*"
