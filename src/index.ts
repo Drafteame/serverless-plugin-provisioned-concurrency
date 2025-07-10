@@ -225,19 +225,67 @@ class ProvisionedConcurrency {
     const functionName = this._getFunctionName(name);
 
     try {
-      // Get the specific version or create a new one
       let version = config.version;
 
       if (!version || version === 'latest') {
-        // If no version specified or 'latest', get the latest version number
         version = await this._getLatestVersion(functionName);
       }
+
+      await this._managePreviousConcurrency(functionName, version);
 
       this._logInfo(`Setting provisioned concurrency for ${functionName}:${version} to ${config.concurrency}`);
       await this._setProvisionedConcurrency(functionName, version, config.concurrency);
     } catch (error) {
       this._logError(`Error processing function ${name}: ${(error as Error).message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Extracts version number from a Lambda function ARN
+   * @param {string} arn - Lambda function ARN
+   * @returns {string|null} - Version number or null if not found
+   * @private
+   */
+  private _extractVersionFromArn(arn: string): string | null {
+    if (!arn) return null;
+
+    // ARN format: arn:aws:lambda:region:account-id:function:function-name:version
+    const parts = arn.split(':');
+    if (parts.length < 8) return null;
+
+    return parts[7]; // Version is the 8th part (index 7)
+  }
+
+  /**
+   * Process previously provisioned concurrency set on other function versions and delete them
+   * @param {string} functionName - Name of the function to manage versions
+   * @param {string} version - Current version to set concurrency
+   * @private
+   */
+  private async _managePreviousConcurrency(functionName: string, version: string): Promise<void> {
+    // Check if there are other versions with provisioned concurrency
+    const versionsWithConcurrency = await this._getVersionsWithProvisionedConcurrency(functionName);
+
+    // If other versions with provisioned concurrency exist, delete their concurrency
+    if (versionsWithConcurrency.length == 0) {
+      return;
+    }
+
+    this._logInfo(
+      `Found ${versionsWithConcurrency.length} version(s) with provisioned concurrency for ${functionName}`
+    );
+
+    for (const versionConfig of versionsWithConcurrency) {
+      // Extract version from FunctionArn
+      const versionFromArn = this._extractVersionFromArn(versionConfig.FunctionArn);
+
+      // Skip if it's the same version we're trying to set or if version couldn't be extracted
+      if (versionFromArn === version || !versionFromArn) {
+        continue;
+      }
+
+      await this._deleteProvisionedConcurrency(functionName, versionFromArn);
     }
   }
 
@@ -295,6 +343,54 @@ class ProvisionedConcurrency {
       Qualifier: version,
       ProvisionedConcurrentExecutions: concurrency,
     });
+  }
+
+  /**
+   * Gets all versions with provisioned concurrency for a function
+   * @param {string} functionName - Function name
+   * @returns {Promise<Array>} - Array of version configurations with provisioned concurrency
+   * @private
+   */
+  private async _getVersionsWithProvisionedConcurrency(functionName: string): Promise<any[]> {
+    try {
+      const response = await this.provider.request('Lambda', 'listProvisionedConcurrencyConfigs', {
+        FunctionName: functionName,
+        MaxItems: 50,
+      });
+
+      if (!response.ProvisionedConcurrencyConfigs || response.ProvisionedConcurrencyConfigs.length === 0) {
+        return [];
+      }
+
+      return response.ProvisionedConcurrencyConfigs;
+    } catch (error) {
+      this._logError(
+        `Error getting versions with provisioned concurrency for ${functionName}: ${(error as Error).message}`
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Deletes provisioned concurrency configuration for a function version
+   * @param {string} functionName - Function name
+   * @param {string} version - Function version
+   * @returns {Promise<void>}
+   * @private
+   */
+  private async _deleteProvisionedConcurrency(functionName: string, version: string): Promise<void> {
+    try {
+      this._logInfo(`Deleting provisioned concurrency for ${functionName}:${version}`);
+      await this.provider.request('Lambda', 'deleteProvisionedConcurrencyConfig', {
+        FunctionName: functionName,
+        Qualifier: version,
+      });
+    } catch (error) {
+      this._logError(
+        `Error deleting provisioned concurrency for ${functionName}:${version}: ${(error as Error).message}`
+      );
+      throw error;
+    }
   }
 
   /**

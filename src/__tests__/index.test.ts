@@ -85,6 +85,90 @@ describe('ProvisionedConcurrency', () => {
       expect(mockUtils.progress.create).not.toHaveBeenCalled();
     });
 
+    it('should delete existing provisioned concurrency before setting new one', async () => {
+      // Configure functions with provisioned concurrency
+      mockServerless.service.functions = {
+        func1: {
+          concurrency: {
+            provisioned: 10,
+          },
+        },
+      };
+
+      const mockProvider = mockServerless.getProvider();
+
+      // Mock the provider.request for listVersionsByFunction and listProvisionedConcurrencyConfigs
+      mockProvider.request.mockImplementation((_service: string, method: string, params: any) => {
+        if (method === 'listVersionsByFunction') {
+          return Promise.resolve({
+            Versions: [{ Version: '$LATEST' }, { Version: '1' }, { Version: '2' }, { Version: '3' }],
+          });
+        }
+        if (method === 'listProvisionedConcurrencyConfigs') {
+          return Promise.resolve({
+            ProvisionedConcurrencyConfigs: [
+              {
+                FunctionArn: `arn:aws:lambda:us-east-1:123456789012:function:${params.FunctionName}:1`,
+                RequestedProvisionedConcurrentExecutions: 5,
+                AvailableProvisionedConcurrentExecutions: 5,
+                AllocatedProvisionedConcurrentExecutions: 5,
+                Status: 'READY',
+                StatusReason: null,
+                LastModified: '2025-07-09T21:19:25+0000',
+              },
+              {
+                FunctionArn: `arn:aws:lambda:us-east-1:123456789012:function:${params.FunctionName}:2`,
+                RequestedProvisionedConcurrentExecutions: 5,
+                AvailableProvisionedConcurrentExecutions: 5,
+                AllocatedProvisionedConcurrentExecutions: 5,
+                Status: 'READY',
+                StatusReason: null,
+                LastModified: '2025-07-09T21:19:25+0000',
+              },
+            ],
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
+
+      await plugin.setProvisionedConcurrency();
+
+      // Should call provider.request for listVersionsByFunction, listProvisionedConcurrencyConfigs,
+      // deleteProvisionedConcurrencyConfig (twice), and putProvisionedConcurrencyConfig
+      expect(mockProvider.request).toHaveBeenCalledWith('Lambda', 'listVersionsByFunction', expect.any(Object));
+      expect(mockProvider.request).toHaveBeenCalledWith(
+        'Lambda',
+        'listProvisionedConcurrencyConfigs',
+        expect.any(Object)
+      );
+      expect(mockProvider.request).toHaveBeenCalledWith('Lambda', 'deleteProvisionedConcurrencyConfig', {
+        FunctionName: 'test-service-test-func1',
+        Qualifier: '1',
+      });
+      expect(mockProvider.request).toHaveBeenCalledWith('Lambda', 'deleteProvisionedConcurrencyConfig', {
+        FunctionName: 'test-service-test-func1',
+        Qualifier: '2',
+      });
+      expect(mockProvider.request).toHaveBeenCalledWith('Lambda', 'putProvisionedConcurrencyConfig', {
+        FunctionName: 'test-service-test-func1',
+        Qualifier: '3',
+        ProvisionedConcurrentExecutions: 10,
+      });
+
+      // Should log about finding and deleting existing provisioned concurrency
+      expect(mockUtils.log.info).toHaveBeenCalledWith(
+        expect.stringContaining('Found 2 version(s) with provisioned concurrency for test-service-test-func1')
+      );
+      expect(mockUtils.log.info).toHaveBeenCalledWith(
+        expect.stringContaining('Deleting provisioned concurrency for test-service-test-func1:1')
+      );
+      expect(mockUtils.log.info).toHaveBeenCalledWith(
+        expect.stringContaining('Deleting provisioned concurrency for test-service-test-func1:2')
+      );
+    });
+
     it('should process functions with provisioned concurrency', async () => {
       // Configure functions with provisioned concurrency
       mockServerless.service.functions = {
@@ -104,11 +188,16 @@ describe('ProvisionedConcurrency', () => {
 
       const mockProvider = mockServerless.getProvider();
 
-      // Mock the provider.request for listVersionsByFunction
+      // Mock the provider.request for listVersionsByFunction and listProvisionedConcurrencyConfigs
       mockProvider.request.mockImplementation((_service: string, method: string, _params: any) => {
         if (method === 'listVersionsByFunction') {
           return Promise.resolve({
             Versions: [{ Version: '$LATEST' }, { Version: '1' }, { Version: '2' }, { Version: '3' }],
+          });
+        }
+        if (method === 'listProvisionedConcurrencyConfigs') {
+          return Promise.resolve({
+            ProvisionedConcurrencyConfigs: [],
           });
         }
         return Promise.resolve({});
@@ -129,7 +218,7 @@ describe('ProvisionedConcurrency', () => {
       );
 
       // Should call provider.request for each function
-      expect(mockProvider.request).toHaveBeenCalledTimes(3); // 1 listVersions + 2 putProvisionedConcurrency
+      expect(mockProvider.request).toHaveBeenCalledTimes(5); // 2 listVersionsByFunction + 2 listProvisionedConcurrencyConfigs + 1 putProvisionedConcurrency
 
       // Should log completion
       expect(mockUtils.log.info).toHaveBeenCalledWith(
