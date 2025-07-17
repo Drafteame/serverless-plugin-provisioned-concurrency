@@ -72,8 +72,7 @@ describe('Logger methods', () => {
       const plugin = new ProvisionedConcurrency(mockServerlessWithCli as any, mockOptions as any);
 
       // @ts-ignore - Accessing private method for testing
-      // Using _logInfo instead of _logWarning since _logWarning doesn't exist
-      plugin._logInfo('WARNING: Test warning message');
+      plugin._logWarning('Test warning message');
 
       expect(mockServerlessWithCli.cli.log).toHaveBeenCalledWith(
         'Provisioned Concurrency: WARNING: Test warning message'
@@ -107,8 +106,7 @@ describe('Logger methods', () => {
       const plugin = new ProvisionedConcurrency(mockServerlessWithoutCli as any, mockOptions as any);
 
       // @ts-ignore - Accessing private method for testing
-      // Using _logInfo instead of _logWarning since _logWarning doesn't exist
-      plugin._logInfo('WARNING: Test warning message');
+      plugin._logWarning('Test warning message');
 
       expect(consoleLogSpy).toHaveBeenCalledWith('Provisioned Concurrency: WARNING: Test warning message');
     });
@@ -139,8 +137,7 @@ describe('Logger methods', () => {
       const plugin = new ProvisionedConcurrency(mockServerlessWithCli as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
-      // Using _logInfo instead of _logWarning since _logWarning doesn't exist
-      plugin._logInfo('WARNING: Test warning message');
+      plugin._logWarning('Test warning message');
 
       expect(mockUtils.log.info).toHaveBeenCalledWith('Provisioned Concurrency: WARNING: Test warning message');
       expect(mockServerlessWithCli.cli.log).not.toHaveBeenCalled();
