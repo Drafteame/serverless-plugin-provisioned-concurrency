@@ -1,5 +1,6 @@
 import * as os from 'os';
 import plimit from 'p-limit';
+import NoVersionFoundError from './execptions/NoVersionFoundError';
 
 /**
  * Interface for Serverless instance
@@ -33,6 +34,7 @@ interface ServerlessFunction {
     provisioned?: number;
     version?: string;
   };
+  reservedConcurrency?: number;
 }
 
 /**
@@ -216,6 +218,7 @@ class ProvisionedConcurrency {
 
   /**
    * Processes a single function to set provisioned concurrency
+   * Validates that provisioned concurrency is at most 80% of reserved concurrency if configured
    * @param {Object} func - Function configuration
    * @returns {Promise<void>}
    * @private
@@ -231,12 +234,30 @@ class ProvisionedConcurrency {
         version = await this._getLatestVersion(functionName);
       }
 
-      await this._managePreviousConcurrency(functionName, version);
+      // Check if the function has reserved concurrency configured
+      // If it does, ensure provisioned concurrency is at most 80% of reserved concurrency
+      const originalFunctionConfig = this.serverless.service.functions[name] as ServerlessFunction;
+      if (originalFunctionConfig.reservedConcurrency !== undefined) {
+        const reservedConcurrency = originalFunctionConfig.reservedConcurrency;
+        // Calculate 80% of reserved concurrency as the maximum recommended provisioned concurrency
+        const maxProvisionedConcurrency = Math.floor(reservedConcurrency * 0.8);
+
+        // If provisioned concurrency exceeds 80% of reserved concurrency, print a warning
+        if (config.concurrency > maxProvisionedConcurrency) {
+          this._logWarning(
+            `Function ${functionName} has provisioned concurrency (${config.concurrency}) ` +
+              `higher than 80% of reserved concurrency (${reservedConcurrency}). ` +
+              `Maximum recommended provisioned concurrency is ${maxProvisionedConcurrency}.`
+          );
+        }
+      }
 
       this._logInfo(`Setting provisioned concurrency for ${functionName}:${version} to ${config.concurrency}`);
+
       await this._setProvisionedConcurrency(functionName, version, config.concurrency);
+      await this._managePreviousConcurrency(functionName, version);
     } catch (error) {
-      this._logError(`Error processing function ${name}: ${(error as Error).message}`);
+      this._logError(`API error: ${(error as Error).message}`);
       throw error;
     }
   }
@@ -297,35 +318,27 @@ class ProvisionedConcurrency {
    * @private
    */
   private async _getLatestVersion(functionName: string): Promise<string> {
-    try {
-      const response = await this.provider.request('Lambda', 'listVersionsByFunction', {
-        FunctionName: functionName,
-        MaxItems: 50,
-      });
+    const response = await this.provider.request('Lambda', 'listVersionsByFunction', {
+      FunctionName: functionName,
+      MaxItems: 50,
+    });
 
-      if (!response.Versions || response.Versions.length === 0) {
-        throw new Error(`No versions found for function ${functionName}`);
-      }
-
-      // Get the latest version (excluding $LATEST)
-      const versions = (response.Versions as LambdaVersion[])
-        .filter((v) => v.Version !== '$LATEST')
-        .sort((a, b) => parseInt(b.Version) - parseInt(a.Version));
-
-      if (versions.length === 0) {
-        throw new Error(`No numbered versions found for function ${functionName}. Only $LATEST version exists.`);
-      }
-
-      return versions[0].Version;
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.message.includes('No versions found') || error.message.includes('No numbered versions found'))
-      ) {
-        throw error; // Re-throw our custom errors
-      }
-      throw new Error(`Error getting latest version for ${functionName}: ${(error as Error).message}`);
+    if (!response.Versions || response.Versions.length === 0) {
+      throw new NoVersionFoundError(`No versions found for function ${functionName}`);
     }
+
+    // Get the latest version (excluding $LATEST)
+    const versions = (response.Versions as LambdaVersion[])
+      .filter((v) => v.Version !== '$LATEST')
+      .sort((a, b) => parseInt(b.Version) - parseInt(a.Version));
+
+    if (versions.length === 0) {
+      throw new NoVersionFoundError(
+        `No numbered versions found for function ${functionName}. Only $LATEST version exists.`
+      );
+    }
+
+    return versions[0].Version;
   }
 
   /**
@@ -337,12 +350,57 @@ class ProvisionedConcurrency {
    * @private
    */
   private async _setProvisionedConcurrency(functionName: string, version: string, concurrency: number): Promise<void> {
-    this._logInfo('updating provisioned concurrency');
-    await this.provider.request('Lambda', 'putProvisionedConcurrencyConfig', {
-      FunctionName: functionName,
-      Qualifier: version,
-      ProvisionedConcurrentExecutions: concurrency,
-    });
+    this._logInfo(`Setting provisioned concurrency for ${functionName}:${version} to ${concurrency}`);
+
+    try {
+      await this.provider.request('Lambda', 'putProvisionedConcurrencyConfig', {
+        FunctionName: functionName,
+        Qualifier: version,
+        ProvisionedConcurrentExecutions: concurrency,
+      });
+
+      // Wait for the configuration to be ready
+      await this._waitForProvisionedConcurrencyReady(functionName, version);
+    } catch (error) {
+      if ((error as Error).message.includes('InvalidParameterValueException')) {
+        this._logError(
+          `Invalid provisioned concurrency configuration for ${functionName}:${version}. ` +
+            `Check that the value (${concurrency}) is within AWS limits and doesn't exceed reserved concurrency.`
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async _waitForProvisionedConcurrencyReady(functionName: string, version: string): Promise<void> {
+    const maxAttempts = 30; // 5-minute max wait
+    const delayMs = 10000; // 10 seconds between checks
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const response = await this.provider.request('Lambda', 'getProvisionedConcurrencyConfig', {
+          FunctionName: functionName,
+          Qualifier: version,
+        });
+
+        if (response.Status === 'READY') {
+          this._logInfo(`Provisioned concurrency for ${functionName}:${version} is ready`);
+          return;
+        }
+
+        this._logInfo(`Provisioned concurrency status: ${response.Status}. Waiting...`);
+        await this._delay(delayMs);
+      } catch (error) {
+        this._logError(`Error checking provisioned concurrency status: ${(error as Error).message}`);
+        throw error;
+      }
+    }
+
+    throw new Error(`Provisioned concurrency for ${functionName}:${version} did not become ready within timeout`);
+  }
+
+  private async _delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -442,6 +500,15 @@ class ProvisionedConcurrency {
    */
   private _logError(message: string): void {
     this.log.error(`Provisioned Concurrency: ${message}`);
+  }
+
+  /**
+   * Logs warning message
+   * @param {string} message - Message to log
+   * @private
+   */
+  private _logWarning(message: string): void {
+    this.log.info(`Provisioned Concurrency: WARNING: ${message}`);
   }
 
   /**
