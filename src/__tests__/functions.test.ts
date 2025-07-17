@@ -12,6 +12,7 @@ describe('Function processing methods', () => {
       provider: {
         stage: 'test',
       },
+      custom: {},
     },
     cli: {
       log: jest.fn(),
@@ -51,7 +52,7 @@ describe('Function processing methods', () => {
       expect(functions).toEqual([]);
     });
 
-    it('should return only functions with provisioned concurrency', () => {
+    it('should return only functions with provisioned concurrency using concurrency.provisioned format', () => {
       // Configure functions with and without provisioned concurrency
       mockServerless.service.functions = {
         func1: {
@@ -81,12 +82,53 @@ describe('Function processing methods', () => {
       expect(functions[1].name).toBe('func2');
 
       expect(functions[0].config).toEqual({
-        concurrency: 10,
+        provisioned: 10,
+        reserved: null,
         version: null,
       });
 
       expect(functions[1].config).toEqual({
-        concurrency: 5,
+        provisioned: 5,
+        reserved: null,
+        version: '2',
+      });
+    });
+
+    it('should return functions with provisioned concurrency', () => {
+      // Configure functions with concurrency.provisioned
+      mockServerless.service.functions = {
+        func1: {
+          concurrency: {
+            provisioned: 10,
+          },
+        },
+        func2: {
+          concurrency: {
+            provisioned: 5,
+            version: '2',
+          },
+        },
+        func3: {}, // No concurrency config
+      };
+
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
+
+      // @ts-ignore - Accessing private method for testing
+      const functions = plugin._getConfiguredFunctions();
+
+      expect(functions).toHaveLength(2);
+      expect(functions[0].name).toBe('func1');
+      expect(functions[1].name).toBe('func2');
+
+      expect(functions[0].config).toEqual({
+        provisioned: 10,
+        reserved: null,
+        version: null,
+      });
+
+      expect(functions[1].config).toEqual({
+        provisioned: 5,
+        reserved: null,
         version: '2',
       });
     });
@@ -129,7 +171,8 @@ describe('Function processing methods', () => {
       const functionConfig = {
         name: 'myFunction',
         config: {
-          concurrency: 10,
+          provisioned: 10,
+          reserved: null,
           version: '2',
         },
       };
@@ -185,7 +228,8 @@ describe('Function processing methods', () => {
       const functionConfig = {
         name: 'myFunction',
         config: {
-          concurrency: 10,
+          provisioned: 10,
+          reserved: null,
           version: null, // No version specified
         },
       };
@@ -247,7 +291,8 @@ describe('Function processing methods', () => {
       const functionConfig = {
         name: 'myFunction',
         config: {
-          concurrency: 10,
+          provisioned: 10,
+          reserved: null,
           version: 'latest', // "latest" specified
         },
       };
@@ -293,7 +338,8 @@ describe('Function processing methods', () => {
       const functionConfig = {
         name: 'myFunction',
         config: {
-          concurrency: 10,
+          provisioned: 10,
+          reserved: null,
           version: '2',
         },
       };
@@ -340,7 +386,8 @@ describe('Function processing methods', () => {
       const functionConfig = {
         name: 'myFunction',
         config: {
-          concurrency: 10,
+          provisioned: 10,
+          reserved: null,
           version: '2',
         },
       };
@@ -384,7 +431,8 @@ describe('Function processing methods', () => {
       const functionConfig = {
         name: 'myFunction',
         config: {
-          concurrency: 80, // Exactly 80% of reserved concurrency
+          provisioned: 80, // Exactly 80% of reserved concurrency
+          reserved: 100,
           version: '2',
         },
       };
@@ -428,7 +476,8 @@ describe('Function processing methods', () => {
       const functionConfig = {
         name: 'myFunction',
         config: {
-          concurrency: 81, // Exceeds 80% of reserved concurrency
+          provisioned: 81, // Exceeds 80% of reserved concurrency
+          reserved: 100,
           version: '2',
         },
       };
@@ -441,6 +490,112 @@ describe('Function processing methods', () => {
         'Provisioned Concurrency: WARNING: Function test-service-test-myFunction has provisioned concurrency (81) ' +
           'higher than 80% of reserved concurrency (100). ' +
           'Maximum recommended provisioned concurrency is 80.'
+      );
+    });
+
+    it('should use custom maxPercent when configured in custom.provisionedConcurrency.maxPercent', async () => {
+      const mockProvider = mockServerless.getProvider();
+
+      // Configure a function with reserved concurrency
+      mockServerless.service.functions = {
+        myFunction: {
+          reservedConcurrency: 100, // 90% of this is 90
+        },
+      };
+
+      // Configure custom.provisionedConcurrency.maxPercent
+      mockServerless.service.custom = {
+        provisionedConcurrency: {
+          maxPercent: 90, // 90% instead of default 80%
+        },
+      };
+
+      // Mock the provider.request for getProvisionedConcurrencyConfig
+      mockProvider.request.mockImplementation((_service: string, method: string, _params: any) => {
+        if (method === 'getProvisionedConcurrencyConfig') {
+          return Promise.resolve({
+            Status: 'READY',
+            RequestedProvisionedConcurrentExecutions: 91,
+            AvailableProvisionedConcurrentExecutions: 91,
+            AllocatedProvisionedConcurrentExecutions: 91,
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
+      // @ts-ignore - Accessing private method for testing
+      plugin._delay = jest.fn().mockResolvedValue(undefined);
+
+      const functionConfig = {
+        name: 'myFunction',
+        config: {
+          provisioned: 91, // Exceeds 90% of reserved concurrency
+          reserved: 100,
+          version: '2',
+        },
+      };
+
+      // @ts-ignore - Accessing private method for testing
+      await plugin._processFunction(functionConfig);
+
+      // Should log a warning about reserved concurrency with custom percentage
+      expect(mockUtils.log.info).toHaveBeenCalledWith(
+        'Provisioned Concurrency: WARNING: Function test-service-test-myFunction has provisioned concurrency (91) ' +
+          'higher than 90% of reserved concurrency (100). ' +
+          'Maximum recommended provisioned concurrency is 90.'
+      );
+    });
+
+    it('should not show warning when provisioned concurrency is within custom maxPercent', async () => {
+      const mockProvider = mockServerless.getProvider();
+
+      // Configure a function with reserved concurrency
+      mockServerless.service.functions = {
+        myFunction: {
+          reservedConcurrency: 100, // 90% of this is 90
+        },
+      };
+
+      // Configure custom.provisionedConcurrency.maxPercent
+      mockServerless.service.custom = {
+        provisionedConcurrency: {
+          maxPercent: 90, // 90% instead of default 80%
+        },
+      };
+
+      // Mock the provider.request for getProvisionedConcurrencyConfig
+      mockProvider.request.mockImplementation((_service: string, method: string, _params: any) => {
+        if (method === 'getProvisionedConcurrencyConfig') {
+          return Promise.resolve({
+            Status: 'READY',
+            RequestedProvisionedConcurrentExecutions: 90,
+            AvailableProvisionedConcurrentExecutions: 90,
+            AllocatedProvisionedConcurrentExecutions: 90,
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
+      // @ts-ignore - Accessing private method for testing
+      plugin._delay = jest.fn().mockResolvedValue(undefined);
+
+      const functionConfig = {
+        name: 'myFunction',
+        config: {
+          provisioned: 90, // Exactly 90% of reserved concurrency
+          reserved: 100,
+          version: '2',
+        },
+      };
+
+      // @ts-ignore - Accessing private method for testing
+      await plugin._processFunction(functionConfig);
+
+      // Should not log any warning about reserved concurrency
+      expect(mockUtils.log.info).not.toHaveBeenCalledWith(
+        expect.stringContaining('WARNING: Function test-service-test-myFunction has provisioned concurrency')
       );
     });
   });

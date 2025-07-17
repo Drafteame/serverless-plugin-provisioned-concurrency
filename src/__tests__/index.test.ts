@@ -227,9 +227,9 @@ describe('ProvisionedConcurrency', () => {
 
       await plugin.setProvisionedConcurrency();
 
-      // Should create a progress indicator
+      // Should create a progress indicator with the initial message
       expect(mockUtils.progress.create).toHaveBeenCalledWith({
-        message: 'Setting provisioned concurrency...',
+        message: expect.stringMatching(/Setting provisioned concurrency \(0\/\d+\) \(0s\)/),
       });
 
       // Should log CPU count
@@ -330,9 +330,9 @@ describe('ProvisionedConcurrency', () => {
 
       await plugin.setProvisionedConcurrencyForFunction();
 
-      // Should create a progress indicator
+      // Should create a progress indicator with the initial message
       expect(mockUtils.progress.create).toHaveBeenCalledWith({
-        message: 'Setting provisioned concurrency for function func1...',
+        message: expect.stringMatching(/Setting provisioned concurrency for function func1 \(0\/1\) \(0s\)/),
       });
 
       // Should call provider.request for the function
@@ -452,31 +452,37 @@ describe('ProvisionedConcurrency', () => {
   });
 
   describe('_normalizeConfig', () => {
-    it('should normalize config with defaults', () => {
+    it('should normalize config with defaults using concurrency object', () => {
       const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
       const normalized = plugin._normalizeConfig({
-        provisioned: 10,
+        concurrency: {
+          provisioned: 10,
+        },
       });
 
       expect(normalized).toEqual({
-        concurrency: 10,
+        provisioned: 10,
+        reserved: null,
         version: null,
       });
     });
 
-    it('should normalize config with version', () => {
+    it('should normalize config with version using concurrency object', () => {
       const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
       const normalized = plugin._normalizeConfig({
-        provisioned: 10,
-        version: '2',
+        concurrency: {
+          provisioned: 10,
+          version: '2',
+        },
       });
 
       expect(normalized).toEqual({
-        concurrency: 10,
+        provisioned: 10,
+        reserved: null,
         version: '2',
       });
     });
@@ -485,10 +491,11 @@ describe('ProvisionedConcurrency', () => {
       const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // @ts-ignore - Accessing private method for testing
-      const normalized = plugin._normalizeConfig(undefined);
+      const normalized = plugin._normalizeConfig({} as any);
 
       expect(normalized).toEqual({
-        concurrency: 1,
+        provisioned: null,
+        reserved: null,
         version: null,
       });
     });

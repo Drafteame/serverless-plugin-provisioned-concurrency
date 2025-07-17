@@ -72,7 +72,7 @@ describe('Progress methods', () => {
 
       // Should use the provided progress utility
       expect(mockUtils.progress.create).toHaveBeenCalledWith({
-        message: 'Setting provisioned concurrency...',
+        message: expect.stringMatching(/Setting provisioned concurrency \(\d+\/\d+\) \(\d+s\)/),
       });
     });
 
