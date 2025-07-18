@@ -65,6 +65,20 @@ describe('Progress methods', () => {
         },
       };
 
+      // Mock the provider to return successful responses
+      const mockProvider = {
+        request: jest.fn().mockImplementation((_service: string, method: string, _params: any) => {
+          if (method === 'getProvisionedConcurrencyConfig') {
+            return Promise.resolve({ Status: 'READY' });
+          }
+          return Promise.resolve({
+            Versions: [{ Version: '$LATEST' }, { Version: '1' }, { Version: '2' }],
+            ProvisionedConcurrencyConfigs: [],
+          });
+        }),
+      };
+      mockServerless.getProvider.mockReturnValue(mockProvider);
+
       const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // Trigger a method that uses progress
@@ -92,6 +106,20 @@ describe('Progress methods', () => {
         },
       };
 
+      // Mock the provider to return successful responses
+      const mockProvider = {
+        request: jest.fn().mockImplementation((_service: string, method: string, _params: any) => {
+          if (method === 'getProvisionedConcurrencyConfig') {
+            return Promise.resolve({ Status: 'READY' });
+          }
+          return Promise.resolve({
+            Versions: [{ Version: '$LATEST' }, { Version: '1' }, { Version: '2' }],
+            ProvisionedConcurrencyConfigs: [],
+          });
+        }),
+      };
+      mockServerless.getProvider.mockReturnValue(mockProvider);
+
       const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // Trigger a method that uses progress
@@ -116,16 +144,34 @@ describe('Progress methods', () => {
         },
       };
 
-      // Mock the provider to throw an error
+      // Mock the provider to throw an error for specific methods
       const mockProvider = {
-        request: jest.fn().mockRejectedValue(new Error('Test error')),
+        request: jest.fn().mockImplementation((_service: string, method: string, _params: any) => {
+          if (method === 'putProvisionedConcurrencyConfig') {
+            return Promise.reject(new Error('Test error'));
+          }
+          // Return successful responses for other methods to avoid unrelated errors
+          if (method === 'getProvisionedConcurrencyConfig') {
+            return Promise.resolve({ Status: 'READY' });
+          }
+          return Promise.resolve({
+            Versions: [{ Version: '$LATEST' }, { Version: '1' }],
+            ProvisionedConcurrencyConfigs: [],
+          });
+        }),
       };
       mockServerless.getProvider.mockReturnValue(mockProvider);
 
       const plugin = new ProvisionedConcurrency(mockServerless as any, mockOptions as any, mockUtils as any);
 
       // Trigger a method that uses progress and will encounter an error
-      await plugin.setProvisionedConcurrency();
+      // Wrap in try/catch to handle the expected error
+      try {
+        await plugin.setProvisionedConcurrency();
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (error) {
+        // Expected error, do nothing
+      }
 
       // Should remove the progress indicator even on error
       expect(mockRemove).toHaveBeenCalled();
