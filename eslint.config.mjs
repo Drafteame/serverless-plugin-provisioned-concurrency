@@ -7,6 +7,10 @@ import tsParser from '@typescript-eslint/parser';
 
 export default [
   {
+    // Ignore the dist directory
+    ignores: ['dist/**'],
+  },
+  {
     files: ['src/**/*.{js,ts}'],
     plugins: {
       import: imp,

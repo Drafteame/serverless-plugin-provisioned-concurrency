@@ -129,12 +129,27 @@ Each function can include a `concurrency` section with the following options:
 | `provisioned` | number | Yes      | -       | The number of provisioned concurrency units                                      |
 | `version`     | string | No       | latest  | The Lambda version to configure (use specific version number or omit for latest) |
 
+### Global Configuration
+
+You can configure global settings for the plugin under the `custom.provisionedConcurrency` section:
+
+| Option       | Type   | Required | Default | Description                                                                                                                                                                 |
+| ------------ | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maxPercent` | number | No       | 80      | Maximum percentage of reserved concurrency allowed to be configured as provisioned concurrency. If any function exceeds this limit, the deployment process will be stopped. |
+
 ### Configuration Format
 
 ```yaml
+# Global plugin configuration
+custom:
+  provisionedConcurrency:
+    maxPercent: 90 # Optional - maximum percentage of reserved concurrency (defaults to 80)
+
+# Function configuration
 functions:
   myFunction:
     handler: src/handler.js
+    reservedConcurrency: 100 # Optional - reserved concurrency for the function
     concurrency:
       provisioned: 10 # Required - number of concurrent executions
       version: '2' # Optional - specific version (defaults to latest)
@@ -176,7 +191,8 @@ functions:
 The plugin includes comprehensive error handling:
 
 - Logs detailed error messages for debugging
-- Continues processing other functions if one fails
+- Validates all functions before processing and stops the deployment process if any function exceeds the maximum provisioned concurrency limit (throws MaximumConcurrencyError)
+- Throws NoVersionFoundError when no versions are found for a function
 - Gracefully handles missing functions or versions
 - Provides clear status messages during execution
 
@@ -207,7 +223,7 @@ Make sure your AWS credentials have the following permissions:
 
 ### Prerequisites
 
-- Node.js >= 14.0.0
+- Node.js >= 22.0.0
 - npm or yarn
 
 ### Setup
