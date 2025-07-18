@@ -1,111 +1,20 @@
 import * as os from 'os';
 import plimit from 'p-limit';
-import chalk from 'chalk';
+// import chalk from 'chalk';
 import NoVersionFoundError from './execptions/NoVersionFoundError';
-
-/**
- * Interface for Serverless instance
- */
-interface Serverless {
-  getProvider(_name: string): ServerlessProvider;
-  service: {
-    service: string;
-    functions: Record<string, ServerlessFunction>;
-    provider: {
-      stage: string;
-    };
-    custom?: Record<string, any>;
-  };
-  cli?: {
-    log(_message: string, _entity?: string): void;
-  };
-}
-
-/**
- * Interface for Serverless provider
- */
-interface ServerlessProvider {
-  request(_service: string, _method: string, _params: Record<string, any>): Promise<any>;
-}
-
-/**
- * Interface for Serverless function configuration
- */
-interface ServerlessFunction {
-  concurrency?: {
-    provisioned?: number;
-    version?: string;
-  };
-  reservedConcurrency?: number;
-}
-
-/**
- * Interface for Serverless options
- */
-interface ServerlessOptions {
-  function?: string;
-  [key: string]: any;
-}
-
-/**
- * Interface for Serverless utils (v4)
- */
-interface ServerlessUtils {
-  log: {
-    info(_message: string): void;
-    error(_message: string): void;
-  };
-  progress: {
-    create(_options: { message: string }): { remove(): void };
-  };
-}
-
-/**
- * Interface for normalized function configuration
- */
-interface NormalizedFunctionConfig {
-  provisioned: number;
-  reserved?: number;
-  version?: string;
-}
-
-/**
- * Interface for function with configuration
- */
-interface FunctionWithConfig {
-  name: string;
-  config: NormalizedFunctionConfig;
-}
-
-/**
- * Interface for a Lambda version
- */
-interface LambdaVersion {
-  Version: string;
-  [key: string]: any;
-}
-
-/**
- * Interface for serverless logger
- */
-interface Logger {
-  info(_message: string): void;
-  error(_message: string): void;
-}
-
-/**
- * Interface for serverless progress spinner instance
- */
-interface Spinner {
-  remove(): void;
-}
-
-/**
- * Interface for serverless progress manager
- */
-interface Progress {
-  create(_options: { message: string }): Spinner;
-}
+import MaximumConcurrencyError from './execptions/MaximumConcurrencyError';
+import {
+  Serverless,
+  ServerlessOptions,
+  ServerlessProvider,
+  ServerlessFunction,
+  ServerlessUtils,
+  Logger,
+  Progress,
+  LambdaVersion,
+  FunctionWithConfig,
+  NormalizedFunctionConfig,
+} from './interfaces';
 
 /**
  * LambdaProvisionedConcurrency is a serverless plugin that manages provisioned concurrency
@@ -138,48 +47,129 @@ class ProvisionedConcurrency {
     this.provider = this.serverless.getProvider('aws');
 
     this.hooks = {
+      'before:aws:deploy:deploy:updateStack': this.validateConcurrency.bind(this),
+      'before:deploy:function:deploy': this.validateConcurrencyForFunction.bind(this),
       'after:aws:deploy:deploy:updateStack': this.setProvisionedConcurrency.bind(this),
       'after:deploy:function:deploy': this.setProvisionedConcurrencyForFunction.bind(this),
     };
   }
 
-  /**
-   * Creates a legacy logger for Serverless v3 compatibility
-   * @returns {Object}
-   * @private
-   */
-  private _createLegacyLogger(): Logger {
-    return {
-      info: (message: string) => {
-        if (this.serverless.cli?.log) {
-          this.serverless.cli.log(message);
-        } else {
-          console.log(message); // eslint-disable-line no-console
-        }
-      },
-      error: (message: string) => {
-        if (this.serverless.cli?.log) {
-          this.serverless.cli.log(message, 'ERROR');
-        } else {
-          console.error(message); // eslint-disable-line no-console
-        }
-      },
-    };
+  async validateConcurrency(): Promise<void> {
+    // Validate all functions before processing
+    const validationErrors = this._validateAllFunctions();
+    if (validationErrors.length > 0) {
+      // Join all error messages with line breaks
+      const errorMessage = validationErrors.join('\n\n');
+      throw new MaximumConcurrencyError(
+        `Validation failed for the following functions:\n\n${errorMessage}\n\nDeployment process stopped.`
+      );
+    }
+  }
+
+  async validateConcurrencyForFunction(): Promise<void> {
+    const functionName = this.options.function;
+
+    if (!functionName) {
+      this._logError('Function name not provided');
+      return;
+    }
+
+    const functions = this._getConfiguredFunctions();
+    const func = functions.find((func) => func.name === functionName);
+
+    if (!func) {
+      return;
+    }
+
+    const error = this._validateProvisionedConcurrency(func);
+
+    if (error) {
+      throw new MaximumConcurrencyError(
+        `Validation failed for function ${functionName}:\n\n${error}\n\nDeployment process stopped.`
+      );
+    }
   }
 
   /**
-   * Creates a legacy progress handler for Serverless v3 compatibility
-   * @returns {Object}
-   * @private
+   * Sets provisioned concurrency for a single function after it's deployed
+   * using the 'serverless deploy function' command
+   * @returns {Promise<void>}
    */
-  private _createLegacyProgress(): Progress {
-    return {
-      create: (_options: { message: string }) => ({
-        remove: () => {
-          // No-op for v3 compatibility
-        },
+  async setProvisionedConcurrencyForFunction(): Promise<void> {
+    // Get the function name from the options
+    const functionName = this.options.function;
+
+    if (!functionName) {
+      this._logError('Function name not provided');
+      return;
+    }
+
+    this._logInfo(`Checking provisioned concurrency for function: ${functionName}`);
+
+    // Get all functions with provisioned concurrency configured
+    const allConfiguredFunctions = this._getConfiguredFunctions();
+
+    // Find the specific function we're deploying
+    const functionConfig = allConfiguredFunctions.find((func) => func.name === functionName);
+
+    if (!functionConfig) {
+      this._logInfo(`Function ${functionName} does not have provisioned concurrency configured`);
+      return;
+    }
+
+    // Validate the function before processing
+    const validationError = this._validateProvisionedConcurrency(functionConfig);
+    if (validationError) {
+      throw new MaximumConcurrencyError(
+        `Validation failed for function ${functionName}:\n\n${validationError}\n\nDeployment process stopped.`
+      );
+    }
+
+    // Create a shared state object for tracking progress
+    const state = {
+      progress: this.progress.create({
+        message: `Setting provisioned concurrency for function ${functionName} (0/1) (0s)`,
       }),
+      completedCount: 0,
+      totalCount: 1,
+      startTime: Date.now(),
+      updateMessage: function () {
+        const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
+        return `Setting provisioned concurrency for function ${functionName} (${this.completedCount}/${this.totalCount}) (${elapsedSeconds}s)`;
+      },
     };
+
+    // Start a timer to update the spinner message with elapsed time
+    const updateInterval = setInterval(() => {
+      if (state.progress) {
+        state.progress.remove();
+        state.progress = this.progress.create({
+          message: state.updateMessage(),
+        });
+      } else {
+        clearInterval(updateInterval);
+      }
+    }, 1000);
+
+    try {
+      await this._processFunction(functionConfig, state);
+      this._logInfo(`Provisioned concurrency set for function ${functionName}`);
+    } catch (error) {
+      this._logError(`Error setting provisioned concurrency for function ${functionName}: ${(error as Error).message}`);
+      // Re-throw the error to stop the deployment process
+      throw error;
+    } finally {
+      clearInterval(updateInterval);
+      if (state.progress) {
+        state.progress.remove();
+        // Create a fake spinner that satisfies the Spinner interface
+        state.progress = {
+          remove: () => {
+            // No-op
+          },
+        };
+      }
+    }
   }
 
   /**
@@ -236,6 +226,8 @@ class ProvisionedConcurrency {
       this._logInfo('Provisioned concurrency configuration completed');
     } catch (error) {
       this._logError(`Error setting provisioned concurrency: ${(error as Error).message}`);
+      // Re-throw the error to stop the deployment process
+      throw error;
     } finally {
       clearInterval(updateInterval);
       if (state.progress) {
@@ -251,64 +243,84 @@ class ProvisionedConcurrency {
   }
 
   /**
-   * Processes a single function to set provisioned concurrency
-   * Validates that provisioned concurrency is at most the configured maxPercent of reserved concurrency if configured
-   * @param {Object} func - Function configuration
-   * @param {Object} state - Shared state object for tracking progress (optional)
-   * @returns {Promise<void>}
+   * Validates a function's provisioned concurrency against its reserved concurrency
+   * @param {FunctionWithConfig} func - Function configuration
+   * @returns {string|null} - Error message if validation fails, null if validation passes
    * @private
    */
+  private _validateProvisionedConcurrency(func: FunctionWithConfig): string | null {
+    const { name, config } = func;
+    const functionName = this._getFunctionName(name);
+
+    // Check if the function has reserved concurrency configured
+    // If it does, ensure provisioned concurrency is at most maxPercent of reserved concurrency
+    const originalFunctionConfig = this.serverless.service.functions[name] as ServerlessFunction;
+    const maxPercent = this._getProvisionedConcurrencyPercent();
+    const percentDisplay = Math.round(maxPercent * 100);
+
+    // Use the reserved concurrency from the config if available, otherwise from the original function config
+    const reservedConcurrency =
+      config.reserved !== null && config.reserved !== undefined
+        ? config.reserved
+        : originalFunctionConfig.reservedConcurrency;
+
+    // Only check if reserved concurrency is configured
+    if (reservedConcurrency !== null && reservedConcurrency !== undefined) {
+      const maxProvisionedConcurrency = Math.floor(reservedConcurrency * maxPercent);
+      // If provisioned concurrency exceeds maxPercent of reserved concurrency, return an error message
+      if (config.provisioned > maxProvisionedConcurrency) {
+        return (
+          `Function ${functionName} has provisioned concurrency (${config.provisioned}) ` +
+          `higher than ${percentDisplay}% of reserved concurrency (${reservedConcurrency}). ` +
+          `Maximum recommended provisioned concurrency is ${maxProvisionedConcurrency}. ` +
+          `Maximum available provisioned concurrency is ${reservedConcurrency - 1}.`
+        );
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Validates all functions configured for provisioned concurrency
+   * @returns {string[]} - Array of error messages for functions that fail validation
+   * @private
+   */
+  private _validateAllFunctions(): string[] {
+    const functions = this._getConfiguredFunctions();
+    const errors: string[] = [];
+
+    for (const func of functions) {
+      const error = this._validateProvisionedConcurrency(func);
+      if (error) {
+        errors.push(error);
+      }
+    }
+
+    return errors;
+  }
+
   private async _processFunction(func: FunctionWithConfig, state?: any): Promise<void> {
     const { name, config } = func;
     const functionName = this._getFunctionName(name);
 
-    try {
-      let version = config.version;
+    let version = config.version;
 
-      if (!version || version === 'latest') {
-        version = await this._getLatestVersion(functionName);
+    if (!version || version === 'latest') {
+      version = await this._getLatestVersion(functionName);
+    }
+
+    await this._setProvisionedConcurrency(functionName, version, config.provisioned, state);
+
+    // Update the completed count and refresh the progress message if a state is provided
+    if (state) {
+      state.completedCount += 1;
+      if (state.progress) {
+        state.progress.remove();
+        state.progress = this.progress.create({
+          message: state.updateMessage(),
+        });
       }
-
-      // Check if the function has reserved concurrency configured
-      // If it does, ensure provisioned concurrency is at most maxPercent of reserved concurrency
-      const originalFunctionConfig = this.serverless.service.functions[name] as ServerlessFunction;
-      const maxPercent = this._getProvisionedConcurrencyPercent();
-      const percentDisplay = Math.round(maxPercent * 100);
-
-      // Use the reserved concurrency from the config if available, otherwise from the original function config
-      const reservedConcurrency =
-        config.reserved !== null && config.reserved !== undefined
-          ? config.reserved
-          : originalFunctionConfig.reservedConcurrency;
-
-      // Only check and warn if reserved concurrency is configured
-      if (reservedConcurrency !== null && reservedConcurrency !== undefined) {
-        const maxProvisionedConcurrency = Math.floor(reservedConcurrency * maxPercent);
-        // If provisioned concurrency exceeds maxPercent of reserved concurrency, print a warning
-        if (config.provisioned > maxProvisionedConcurrency) {
-          this._logWarning(
-            `Function ${functionName} has provisioned concurrency (${config.provisioned}) ` +
-              `higher than ${percentDisplay}% of reserved concurrency (${reservedConcurrency}). ` +
-              `Maximum recommended provisioned concurrency is ${maxProvisionedConcurrency}.`
-          );
-        }
-      }
-
-      await this._setProvisionedConcurrency(functionName, version, config.provisioned, state);
-
-      // Update the completed count and refresh the progress message if a state is provided
-      if (state) {
-        state.completedCount += 1;
-        if (state.progress) {
-          state.progress.remove();
-          state.progress = this.progress.create({
-            message: state.updateMessage(),
-          });
-        }
-      }
-    } catch (error) {
-      this._logError(`API error: ${(error as Error).message}`);
-      throw error;
     }
   }
 
@@ -440,7 +452,7 @@ class ProvisionedConcurrency {
     const maxAttempts = 30; // 5-minute max wait
     const delayMs = 10000; // 10 seconds between checks
 
-    // Create a local spinner if state is not provided or doesn't have progress
+    // Create a local spinner if the state is not provided or doesn't have progress
     let localSpinner: any = null;
     // Update the shared spinner message to indicate waiting for this function
     if (state && state.progress) {
@@ -489,7 +501,7 @@ class ProvisionedConcurrency {
 
         await this._delay(delayMs);
       } catch (error) {
-        // Restore the original spinner message or remove local spinner in case of error
+        // Restore the original spinner message or remove the local spinner in case of error
         if (state && state.progress) {
           state.progress.remove();
           state.progress = this.progress.create({
@@ -503,7 +515,7 @@ class ProvisionedConcurrency {
       }
     }
 
-    // Restore the original spinner message or remove local spinner in case of timeout
+    // Restore the original spinner message or remove the local spinner in case of timeout
     if (state && state.progress) {
       state.progress.remove();
       state.progress = this.progress.create({
@@ -628,25 +640,6 @@ class ProvisionedConcurrency {
   }
 
   /**
-   * Logs warning message with yellow color (when not in test environment)
-   * @param {string} message - Message to log
-   * @private
-   */
-  private _logWarning(message: string): void {
-    // Create the warning message
-    const warningMessage = `Provisioned Concurrency: WARNING: ${message}`;
-    // Check if we're in a test environment
-    const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
-    if (isTestEnv) {
-      // In test environment, use the original format
-      this.log.info(warningMessage);
-    } else {
-      // In normal environment, apply chalk coloring
-      this.log.info(warningMessage.replace('WARNING:', chalk.yellow('WARNING:')));
-    }
-  }
-
-  /**
    * Logs info message
    * @param {string} message - Message to log
    * @private
@@ -656,75 +649,42 @@ class ProvisionedConcurrency {
   }
 
   /**
-   * Sets provisioned concurrency for a single function after it's deployed
-   * using the 'serverless deploy function' command
-   * @returns {Promise<void>}
+   * Creates a legacy logger for Serverless v3 compatibility
+   * @returns {Object}
+   * @private
    */
-  async setProvisionedConcurrencyForFunction(): Promise<void> {
-    // Get the function name from the options
-    const functionName = this.options.function;
-
-    if (!functionName) {
-      this._logError('Function name not provided');
-      return;
-    }
-
-    this._logInfo(`Checking provisioned concurrency for function: ${functionName}`);
-
-    // Get all functions with provisioned concurrency configured
-    const allConfiguredFunctions = this._getConfiguredFunctions();
-
-    // Find the specific function we're deploying
-    const functionConfig = allConfiguredFunctions.find((func) => func.name === functionName);
-
-    if (!functionConfig) {
-      this._logInfo(`Function ${functionName} does not have provisioned concurrency configured`);
-      return;
-    }
-
-    // Create a shared state object for tracking progress
-    const state = {
-      progress: this.progress.create({
-        message: `Setting provisioned concurrency for function ${functionName} (0/1) (0s)`,
-      }),
-      completedCount: 0,
-      totalCount: 1,
-      startTime: Date.now(),
-      updateMessage: function () {
-        const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
-        return `Setting provisioned concurrency for function ${functionName} (${this.completedCount}/${this.totalCount}) (${elapsedSeconds}s)`;
+  private _createLegacyLogger(): Logger {
+    return {
+      info: (message: string) => {
+        if (this.serverless.cli?.log) {
+          this.serverless.cli.log(message);
+        } else {
+          console.log(message); // eslint-disable-line no-console
+        }
+      },
+      error: (message: string) => {
+        if (this.serverless.cli?.log) {
+          this.serverless.cli.log(message, 'ERROR');
+        } else {
+          console.error(message); // eslint-disable-line no-console
+        }
       },
     };
+  }
 
-    // Start a timer to update the spinner message with elapsed time
-    const updateInterval = setInterval(() => {
-      if (state.progress) {
-        state.progress.remove();
-        state.progress = this.progress.create({
-          message: state.updateMessage(),
-        });
-      } else {
-        clearInterval(updateInterval);
-      }
-    }, 1000);
-
-    try {
-      await this._processFunction(functionConfig, state);
-      this._logInfo(`Provisioned concurrency set for function ${functionName}`);
-    } catch (error) {
-      this._logError(`Error setting provisioned concurrency for function ${functionName}: ${(error as Error).message}`);
-    } finally {
-      clearInterval(updateInterval);
-      if (state.progress) {
-        state.progress.remove();
-        // Create a dummy spinner that satisfies the Spinner interface
-        state.progress = {
-          remove: () => {
-            // No-op
-          },
-        };
-      }
-    }
+  /**
+   * Creates a legacy progress handler for Serverless v3 compatibility
+   * @returns {Object}
+   * @private
+   */
+  private _createLegacyProgress(): Progress {
+    return {
+      create: (_options: { message: string }) => ({
+        remove: () => {
+          // No-op for v3 compatibility
+        },
+      }),
+    };
   }
 }
 
