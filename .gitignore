@@ -90,7 +90,7 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+dist/
 
 # Gatsby files
 .cache/
@@ -103,7 +103,6 @@ dist
 
 # vuepress v2.x temp and cache directory
 .temp
-.cache
 
 # Docusaurus cache and generated files
 .docusaurus
@@ -157,10 +156,6 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
-
-### Serverless template
-
-.serverless/
 
 ### IDEs template
 
