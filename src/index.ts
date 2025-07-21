@@ -80,6 +80,19 @@ class ProvisionedConcurrency {
         `Validation failed for the following functions:\n\n${errorMessage}\n\nDeployment process stopped.`
       );
     }
+
+    // Get all functions with provisioned concurrency configured
+    const functions = this._getConfiguredFunctions();
+
+    if (functions.length === 0) {
+      this._logInfo('No functions configured for provisioned concurrency');
+      return;
+    }
+
+    // Process each function to manage previous concurrency
+    for (const func of functions) {
+      await this._deleteConcurrency(func);
+    }
   }
 
   async validateConcurrencyForFunction(): Promise<void> {
@@ -103,6 +116,39 @@ class ProvisionedConcurrency {
       throw new MaximumConcurrencyError(
         `Validation failed for function ${functionName}:\n\n${error}\n\nDeployment process stopped.`
       );
+    }
+
+    await this._deleteConcurrency(func);
+  }
+
+  /**
+   * Handles the deletion and adjustment of concurrency settings for a given function configuration.
+   *
+   * @param {FunctionWithConfig} func - The function object with configuration details that includes name, version,
+   * and concurrency settings.
+   * @return {Promise<void>} A Promise that resolves when the concurrency management operation is complete.
+   */
+  private async _deleteConcurrency(func: FunctionWithConfig): Promise<void> {
+    if (func.name.includes('warmUpPlugin')) {
+      this._logInfo(`Skipping warmUpPlugin function: ${func.name}`);
+      return;
+    }
+
+    try {
+      func.name = this._getFunctionName(func.name);
+
+      let version = func.config.version;
+      if (!version || version === 'latest') {
+        version = await this._getLatestVersion(func.name);
+      }
+
+      if (func.config.provisioned === null || func.config.provisioned === undefined || func.config.provisioned === 0) {
+        await this._manageEmptyConfiguration(func);
+      } else {
+        await this._managePreviousConcurrency(func.name, version);
+      }
+    } catch (error) {
+      this._logError(`Error managing previous concurrency for ${func.name}: ${(error as Error).message}`);
     }
   }
 
@@ -129,6 +175,12 @@ class ProvisionedConcurrency {
     const functionConfig = allConfiguredFunctions.find((func) => func.name === functionName);
 
     if (!functionConfig) {
+      this._logInfo(`Function ${functionName} does not have provisioned concurrency configured`);
+      return;
+    }
+
+    // Check if the function has provisioned concurrency configured
+    if (!functionConfig.config.provisioned) {
       this._logInfo(`Function ${functionName} does not have provisioned concurrency configured`);
       return;
     }
@@ -235,14 +287,15 @@ class ProvisionedConcurrency {
       const limit = plimit(cpuCount);
 
       // Map each function to a limited promise
-      const promises = functions.map((func) => limit(() => this._processFunction(func, state)));
+      const promises = functions
+        .filter((func) => !func.name.includes('warmUpPlugin')) // Skip warm
+        .map((func) => limit(() => this._processFunction(func, state)));
 
       // Wait for all promises to complete
       await Promise.all(promises);
       this._logInfo('Provisioned concurrency configuration completed');
     } catch (error) {
       this._logError(`Error setting provisioned concurrency: ${(error as Error).message}`);
-      // Re-throw the error to stop the deployment process
       throw error;
     } finally {
       clearInterval(updateInterval);
@@ -319,6 +372,7 @@ class ProvisionedConcurrency {
   private async _processFunction(func: FunctionWithConfig, state?: any): Promise<void> {
     func.name = this._getFunctionName(func.name);
 
+    // Get the latest version for all functions
     let version = func.config.version;
 
     if (!version || version === 'latest') {
@@ -327,7 +381,10 @@ class ProvisionedConcurrency {
 
     func.config.version = version;
 
-    await this._setProvisionedConcurrency(func, state);
+    // Only set provisioned concurrency for functions with it configured
+    if (func.config.provisioned !== null && func.config.provisioned > 0) {
+      await this._setProvisionedConcurrency(func, state);
+    }
 
     // Update the completed count and refresh the progress message if a state is provided
     if (state) {
@@ -448,27 +505,16 @@ class ProvisionedConcurrency {
 
   /**
    * Updates the provisioned concurrency settings for a specific Lambda function and version.
-   * Removes previous concurrency settings if the current provisioned concurrency is not defined.
+   * Deletion of previous concurrency settings is now handled in the validation stage.
    *
    * @param {FunctionWithConfig} func - The function object containing configuration, including name, version, and provisioned concurrency settings.
    * @param {any} [state] - Optional state used during the provisioning process, such as tracking progress or handling additional context.
    * @return {Promise<void>} A promise that resolves when the provisioned concurrency settings have been updated or removed.
    */
   private async _setProvisionedConcurrency(func: FunctionWithConfig, state?: any): Promise<void> {
-    // Check if the provisioned concurrency is empty (null, undefined, or 0)
-    const isEmpty =
-      func.config.provisioned === null || func.config.provisioned === undefined || func.config.provisioned === 0;
-
-    if (isEmpty) {
-      await this._manageEmptyConfiguration(func);
-      return;
-    }
-
     this._logInfo(
       `Setting provisioned concurrency for ${func.name}:${func.config.version} to ${func.config.provisioned}`
     );
-
-    await this._managePreviousConcurrency(func.name, func.config.version as string);
 
     try {
       await this.provider.request('Lambda', 'putProvisionedConcurrencyConfig', {
