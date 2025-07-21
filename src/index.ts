@@ -179,9 +179,26 @@ class ProvisionedConcurrency {
       return;
     }
 
-    // Check if the function has provisioned concurrency configured
+    // If the function doesn't have provisioned concurrency configured,
+    // we still need to check if there are any previous versions with provisioned concurrency
+    // that need to be deleted
     if (!functionConfig.config.provisioned) {
       this._logInfo(`Function ${functionName} does not have provisioned concurrency configured`);
+
+      // Get the function name with service and stage
+      const fullFunctionName = this._getFunctionName(functionName);
+
+      // Get versions with provisioned concurrency
+      const versionsWithConcurrency = await this._getVersionsWithProvisionedConcurrency(fullFunctionName);
+
+      // Delete provisioned concurrency for all versions
+      for (const versionConfig of versionsWithConcurrency) {
+        const versionFromArn = this._extractVersionFromArn(versionConfig.FunctionArn);
+        if (versionFromArn) {
+          await this._deleteProvisionedConcurrency(fullFunctionName, versionFromArn);
+        }
+      }
+
       return;
     }
 
@@ -372,7 +389,6 @@ class ProvisionedConcurrency {
   private async _processFunction(func: FunctionWithConfig, state?: any): Promise<void> {
     func.name = this._getFunctionName(func.name);
 
-    // Get the latest version for all functions
     let version = func.config.version;
 
     if (!version || version === 'latest') {
@@ -380,6 +396,10 @@ class ProvisionedConcurrency {
     }
 
     func.config.version = version;
+
+    // Get versions with provisioned concurrency for all functions
+    // This ensures listProvisionedConcurrencyConfigs is called for each function
+    await this._getVersionsWithProvisionedConcurrency(func.name);
 
     // Only set provisioned concurrency for functions with it configured
     if (func.config.provisioned !== null && func.config.provisioned > 0) {

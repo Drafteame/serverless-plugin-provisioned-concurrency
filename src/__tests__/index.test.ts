@@ -210,8 +210,7 @@ describe('ProvisionedConcurrency', () => {
       );
 
       // Should call provider.request for each function (including those without provisioned concurrency)
-      // Note: listProvisionedConcurrencyConfigs calls now happen in validation stage, not deployment stage
-      expect(mockProvider.request).toHaveBeenCalledTimes(6); // 3 listVersionsByFunction + 1 putProvisionedConcurrency + 2 getProvisionedConcurrencyConfig
+      expect(mockProvider.request).toHaveBeenCalledTimes(9); // 3 listVersionsByFunction + 3 listProvisionedConcurrencyConfigs + 1 putProvisionedConcurrency + 2 getProvisionedConcurrencyConfig
 
       // Should log completion
       expect(mockUtils.log.info).toHaveBeenCalledWith(
@@ -275,7 +274,7 @@ describe('ProvisionedConcurrency', () => {
       expect(mockUtils.progress.create).not.toHaveBeenCalled();
     });
 
-    it('should not delete provisioned concurrency when function does not have it configured (deletion now happens in validation stage)', async () => {
+    it('should process function even when it does not have provisioned concurrency configured', async () => {
       // Configure functions without provisioned concurrency
       mockServerless.service.functions = {
         func1: {},
@@ -290,6 +289,21 @@ describe('ProvisionedConcurrency', () => {
             Versions: [{ Version: '$LATEST' }, { Version: '1' }],
           });
         }
+
+        if (method === 'listProvisionedConcurrencyConfigs') {
+          return Promise.resolve({
+            ProvisionedConcurrencyConfigs: [
+              {
+                FunctionArn: 'arn:aws:lambda:us-east-1:123456789012:function:test-service-test-func1:1',
+                RequestedProvisionedConcurrentExecutions: 5,
+                AvailableProvisionedConcurrentExecutions: 5,
+                AllocatedProvisionedConcurrentExecutions: 5,
+                Status: 'READY',
+              },
+            ],
+          });
+        }
+
         return Promise.resolve({});
       });
 
@@ -299,23 +313,9 @@ describe('ProvisionedConcurrency', () => {
         mockUtils as any
       );
 
-      // Spy on the deletion methods to verify they are not called
-      // @ts-ignore - Accessing private method for testing
-      const managePreviousSpy = jest.spyOn(plugin, '_managePreviousConcurrency');
-      // @ts-ignore - Accessing private method for testing
-      const deleteProvisionedSpy = jest.spyOn(plugin, '_deleteProvisionedConcurrency');
-      // @ts-ignore - Accessing private method for testing
-      const manageEmptyConfigSpy = jest.spyOn(plugin, '_manageEmptyConfiguration');
-
       await plugin.setProvisionedConcurrencyForFunction();
 
-      // Verify that the deletion methods were not called
-      expect(managePreviousSpy).not.toHaveBeenCalled();
-      expect(deleteProvisionedSpy).not.toHaveBeenCalled();
-      expect(manageEmptyConfigSpy).not.toHaveBeenCalled();
-
-      // Should not log about deleting existing provisioned concurrency
-      expect(mockUtils.log.info).not.toHaveBeenCalledWith(
+      expect(mockUtils.log.info).toHaveBeenCalledWith(
         expect.stringContaining('Deleting provisioned concurrency for test-service-test-func1:1')
       );
     });
@@ -552,7 +552,7 @@ describe('ProvisionedConcurrency', () => {
   });
 
   describe('validateConcurrency', () => {
-    it('should process functions when all functions pass validation and manage previous concurrency', async () => {
+    it('should process functions when all functions pass validation', async () => {
       // Configure functions with valid provisioned concurrency
       mockServerless.service.functions = {
         func1: {
