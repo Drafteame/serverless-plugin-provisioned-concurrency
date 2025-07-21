@@ -28,6 +28,7 @@ class ProvisionedConcurrency {
   private progress: Progress;
   private provider: ServerlessProvider;
   public readonly hooks: Record<string, () => Promise<void>>;
+  public readonly commands: Record<string, any>;
 
   constructor(serverless: Serverless, options: ServerlessOptions, utils?: ServerlessUtils) {
     this.serverless = serverless;
@@ -47,16 +48,31 @@ class ProvisionedConcurrency {
     this.provider = this.serverless.getProvider('aws');
 
     this.hooks = {
-      'before:aws:deploy:deploy:updateStack': this.validateConcurrency.bind(this),
+      'before:deploy:deploy': this.validateConcurrency.bind(this),
       'before:deploy:function:deploy': this.validateConcurrencyForFunction.bind(this),
       'after:aws:deploy:deploy:updateStack': this.setProvisionedConcurrency.bind(this),
       'after:deploy:function:deploy': this.setProvisionedConcurrencyForFunction.bind(this),
+      'concurrency:validate:validate': this.validateConcurrency.bind(this),
+    };
+
+    this.commands = {
+      concurrency: {
+        usage: 'Mange concurrency validations',
+        lifecycleEvents: ['concurrency'],
+        commands: {
+          validate: {
+            usage: 'Validate concurrency configuration for all serve lambdas',
+            lifecycleEvents: ['validate'],
+          },
+        },
+      },
     };
   }
 
   async validateConcurrency(): Promise<void> {
     // Validate all functions before processing
     const validationErrors = this._validateAllFunctions();
+
     if (validationErrors.length > 0) {
       // Join all error messages with line breaks
       const errorMessage = validationErrors.join('\n\n');
@@ -301,16 +317,17 @@ class ProvisionedConcurrency {
   }
 
   private async _processFunction(func: FunctionWithConfig, state?: any): Promise<void> {
-    const { name, config } = func;
-    const functionName = this._getFunctionName(name);
+    func.name = this._getFunctionName(func.name);
 
-    let version = config.version;
+    let version = func.config.version;
 
     if (!version || version === 'latest') {
-      version = await this._getLatestVersion(functionName);
+      version = await this._getLatestVersion(func.name);
     }
 
-    await this._setProvisionedConcurrency(functionName, version, config.provisioned, state);
+    func.config.version = version;
+
+    await this._setProvisionedConcurrency(func, state);
 
     // Update the completed count and refresh the progress message if a state is provided
     if (state) {
@@ -418,34 +435,38 @@ class ProvisionedConcurrency {
    * @returns {Promise<void>}
    * @private
    */
-  private async _setProvisionedConcurrency(
-    functionName: string,
-    version: string,
-    concurrency: number,
-    state?: any
-  ): Promise<void> {
-    this._logInfo(`Setting provisioned concurrency for ${functionName}:${version} to ${concurrency}`);
+  private async _setProvisionedConcurrency(func: FunctionWithConfig, state?: any): Promise<void> {
+    this._logInfo(
+      `Setting provisioned concurrency for ${func.name}:${func.config.version} to ${func.config.provisioned}`
+    );
+
+    await this._managePreviousConcurrency(func.name, func.config.version as string);
 
     try {
       await this.provider.request('Lambda', 'putProvisionedConcurrencyConfig', {
-        FunctionName: functionName,
-        Qualifier: version,
-        ProvisionedConcurrentExecutions: concurrency,
+        FunctionName: func.name,
+        Qualifier: func.config.version,
+        ProvisionedConcurrentExecutions: func.config.provisioned,
       });
 
       // Wait for the configuration to be ready
-      await this._waitForProvisionedConcurrencyReady(functionName, version, state);
+      await this._waitForProvisionedConcurrencyReady(func.name, func.config.version as string, state);
     } catch (error) {
       if ((error as Error).message.includes('InvalidParameterValueException')) {
         this._logError(
-          `Invalid provisioned concurrency configuration for ${functionName}:${version}. ` +
-            `Check that the value (${concurrency}) is within AWS limits and doesn't exceed reserved concurrency.`
+          `Invalid provisioned concurrency configuration for ${func.name}:${func.config.version}. ` +
+            `Check that the value (${func.config.provisioned}) is within AWS limits and doesn't exceed reserved concurrency.`
         );
       }
+
+      this._logError(
+        `Error setting provisioned concurrency for ${func.name}:${func.config.version}: ${(error as Error).message}\n` +
+          `Reserved concurrency: ${func.config.reserved}\n` +
+          `Provisioned concurrency: ${func.config.provisioned}\n`
+      );
+
       throw error;
     }
-
-    await this._managePreviousConcurrency(functionName, version);
   }
 
   private async _waitForProvisionedConcurrencyReady(functionName: string, version: string, state?: any): Promise<void> {
