@@ -52,7 +52,7 @@ describe('Function processing methods', () => {
       expect(functions).toEqual([]);
     });
 
-    it('should return only functions with provisioned concurrency using concurrency.provisioned format', () => {
+    it('should return all functions with normalized config', () => {
       // Configure functions with and without provisioned concurrency
       mockServerless.service.functions = {
         func1: {
@@ -77,9 +77,11 @@ describe('Function processing methods', () => {
       // @ts-ignore - Accessing private method for testing
       const functions = plugin._getConfiguredFunctions();
 
-      expect(functions).toHaveLength(2);
+      expect(functions).toHaveLength(4);
       expect(functions[0].name).toBe('func1');
       expect(functions[1].name).toBe('func2');
+      expect(functions[2].name).toBe('func3');
+      expect(functions[3].name).toBe('func4');
 
       expect(functions[0].config).toEqual({
         provisioned: 10,
@@ -92,9 +94,21 @@ describe('Function processing methods', () => {
         reserved: null,
         version: '2',
       });
+
+      expect(functions[2].config).toEqual({
+        provisioned: null,
+        reserved: null,
+        version: null,
+      });
+
+      expect(functions[3].config).toEqual({
+        provisioned: null,
+        reserved: null,
+        version: null,
+      });
     });
 
-    it('should return functions with provisioned concurrency', () => {
+    it('should return all functions including those without provisioned concurrency', () => {
       // Configure functions with concurrency.provisioned
       mockServerless.service.functions = {
         func1: {
@@ -116,9 +130,10 @@ describe('Function processing methods', () => {
       // @ts-ignore - Accessing private method for testing
       const functions = plugin._getConfiguredFunctions();
 
-      expect(functions).toHaveLength(2);
+      expect(functions).toHaveLength(3);
       expect(functions[0].name).toBe('func1');
       expect(functions[1].name).toBe('func2');
+      expect(functions[2].name).toBe('func3');
 
       expect(functions[0].config).toEqual({
         provisioned: 10,
@@ -130,6 +145,12 @@ describe('Function processing methods', () => {
         provisioned: 5,
         reserved: null,
         version: '2',
+      });
+
+      expect(functions[2].config).toEqual({
+        provisioned: null,
+        reserved: null,
+        version: null,
       });
     });
   });

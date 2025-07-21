@@ -1,7 +1,7 @@
 import * as os from 'os';
 import ProvisionedConcurrency from '../index';
-import MaximumConcurrencyError from '../execptions/MaximumConcurrencyError';
-import NoVersionFoundError from '../execptions/NoVersionFoundError';
+import MaximumConcurrencyError from '../exceptions/MaximumConcurrencyError';
+import NoVersionFoundError from '../exceptions/NoVersionFoundError';
 
 // Mock dependencies
 jest.mock('os');
@@ -236,8 +236,8 @@ describe('ProvisionedConcurrency', () => {
         'Provisioned Concurrency: Using concurrency limit of 4 (based on available CPUs)'
       );
 
-      // Should call provider.request for each function
-      expect(mockProvider.request).toHaveBeenCalledTimes(7); // 2 listVersionsByFunction + 2 listProvisionedConcurrencyConfigs + 1 putProvisionedConcurrency + 2 getProvisionedConcurrencyConfig
+      // Should call provider.request for each function (including those without provisioned concurrency)
+      expect(mockProvider.request).toHaveBeenCalledTimes(9); // 3 listVersionsByFunction + 3 listProvisionedConcurrencyConfigs + 1 putProvisionedConcurrency + 2 getProvisionedConcurrencyConfig
 
       // Should log completion
       expect(mockUtils.log.info).toHaveBeenCalledWith(
@@ -301,11 +301,36 @@ describe('ProvisionedConcurrency', () => {
       expect(mockUtils.progress.create).not.toHaveBeenCalled();
     });
 
-    it('should do nothing when function does not have provisioned concurrency', async () => {
+    it('should process function even when it does not have provisioned concurrency configured', async () => {
       // Configure functions without provisioned concurrency
       mockServerless.service.functions = {
         func1: {},
       };
+
+      const mockProvider = mockServerless.getProvider();
+
+      // Mock the provider.request to return successful responses
+      mockProvider.request.mockImplementation((_service: string, method: string, _params: any) => {
+        if (method === 'listVersionsByFunction') {
+          return Promise.resolve({
+            Versions: [{ Version: '$LATEST' }, { Version: '1' }],
+          });
+        }
+        if (method === 'listProvisionedConcurrencyConfigs') {
+          return Promise.resolve({
+            ProvisionedConcurrencyConfigs: [
+              {
+                FunctionArn: 'arn:aws:lambda:us-east-1:123456789012:function:test-service-test-func1:1',
+                RequestedProvisionedConcurrentExecutions: 5,
+                AvailableProvisionedConcurrentExecutions: 5,
+                AllocatedProvisionedConcurrentExecutions: 5,
+                Status: 'READY',
+              },
+            ],
+          });
+        }
+        return Promise.resolve({});
+      });
 
       const plugin = new ProvisionedConcurrency(
         mockServerless as any,
@@ -316,9 +341,8 @@ describe('ProvisionedConcurrency', () => {
       await plugin.setProvisionedConcurrencyForFunction();
 
       expect(mockUtils.log.info).toHaveBeenCalledWith(
-        'Provisioned Concurrency: Function func1 does not have provisioned concurrency configured'
+        expect.stringContaining('Deleting provisioned concurrency for test-service-test-func1:1')
       );
-      expect(mockUtils.progress.create).not.toHaveBeenCalled();
     });
 
     it('should process function with provisioned concurrency', async () => {
@@ -553,7 +577,7 @@ describe('ProvisionedConcurrency', () => {
   });
 
   describe('validateConcurrency', () => {
-    it('should do nothing when all functions pass validation', async () => {
+    it('should process functions when all functions pass validation', async () => {
       // Configure functions with valid provisioned concurrency
       mockServerless.service.functions = {
         func1: {
@@ -601,8 +625,8 @@ describe('ProvisionedConcurrency', () => {
   });
 
   describe('validateConcurrencyForFunction', () => {
-    it('should do nothing when function passes validation', async () => {
-      // Configure function with valid provisioned concurrency
+    it('should process function when it passes validation', async () => {
+      // Configure a function with valid provisioned concurrency
       mockServerless.service.functions = {
         func1: {
           concurrency: {
@@ -648,11 +672,15 @@ describe('ProvisionedConcurrency', () => {
         .mockReturnValue(
           'Function test-service-test-func1 has provisioned concurrency (100) higher than 80% of reserved concurrency (100)'
         );
+      // Mock setProvisionedConcurrencyForFunction to verify it's not called when validation fails
+      plugin.setProvisionedConcurrencyForFunction = jest.fn().mockResolvedValue(undefined);
 
       await expect(plugin.validateConcurrencyForFunction()).rejects.toThrow(MaximumConcurrencyError);
       await expect(plugin.validateConcurrencyForFunction()).rejects.toThrow(/Validation failed for function func1/);
       // @ts-ignore - Accessing private method for testing
       expect(plugin._validateProvisionedConcurrency).toHaveBeenCalled();
+      // Verify setProvisionedConcurrencyForFunction was not called
+      expect(plugin.setProvisionedConcurrencyForFunction).not.toHaveBeenCalled();
     });
   });
 });
