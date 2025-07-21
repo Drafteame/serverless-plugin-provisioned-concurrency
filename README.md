@@ -169,16 +169,20 @@ functions:
 
 ## How It Works
 
-1. **During Deployment**: The plugin runs after the stack is updated and sets provisioned concurrency for the configured functions
-2. **During Removal**: The plugin runs before stack removal and cleans up all provisioned concurrency configurations
-3. **Version Management**: The plugin ensures only one version of a function has provisioned concurrency:
-   - When setting provisioned concurrency for a version, the plugin first checks if other versions already have provisioned concurrency
-   - If other versions with provisioned concurrency are found, the plugin automatically removes their provisioned concurrency before setting it for the new version
+1. **During Validation**: The plugin runs before deployment and validates all functions. During this phase, it also manages the deletion of provisioned concurrency from previous versions or when configurations are empty.
+2. **During Deployment**: The plugin runs after the stack is updated and sets provisioned concurrency for the configured functions
+3. **During Removal**: The plugin runs before stack removal and cleans up all provisioned concurrency configurations
+4. **Version Management**: The plugin ensures only one version of a function has provisioned concurrency:
+   - During the validation phase, the plugin checks if other versions already have provisioned concurrency
+   - If other versions with provisioned concurrency are found, the plugin automatically removes their provisioned concurrency
    - This prevents having multiple versions with provisioned concurrency, which can lead to unexpected costs
 
 ## Plugin Lifecycle
 
-- **Hook**: `after:aws:deploy:deploy:updateStack` - Sets provisioned concurrency
+- **Hook**: `before:deploy:deploy` - Validates all functions and manages deletion of provisioned concurrency from previous versions
+- **Hook**: `before:deploy:function:deploy` - Validates a single function and manages deletion of provisioned concurrency from previous versions
+- **Hook**: `after:aws:deploy:deploy:updateStack` - Sets provisioned concurrency for all functions
+- **Hook**: `after:deploy:function:deploy` - Sets provisioned concurrency for a single function
 
 ## Version Handling
 
