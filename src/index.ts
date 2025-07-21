@@ -1,8 +1,8 @@
 import * as os from 'os';
 import plimit from 'p-limit';
-// import chalk from 'chalk';
-import NoVersionFoundError from './execptions/NoVersionFoundError';
-import MaximumConcurrencyError from './execptions/MaximumConcurrencyError';
+import NoVersionFoundError from './exceptions/NoVersionFoundError';
+import MaximumConcurrencyError from './exceptions/MaximumConcurrencyError';
+
 import {
   Serverless,
   ServerlessOptions,
@@ -427,15 +427,43 @@ class ProvisionedConcurrency {
   }
 
   /**
-   * Updates provisioned concurrency configuration
-   * @param {string} functionName - Function name
-   * @param {string} version - Function version
-   * @param {number} concurrency - Provisioned concurrency value
-   * @param {Object} state - Shared state object for tracking progress
-   * @returns {Promise<void>}
-   * @private
+   * Manages the case of an empty provisioned concurrency configuration by deleting
+   * any previously existing provisioned concurrency for the specified function.
+   *
+   * @param {FunctionWithConfig} func The function object containing the name and configuration details.
+   * @return {Promise<void>} A promise that resolves when the operation is complete.
+   */
+  private async _manageEmptyConfiguration(func: FunctionWithConfig): Promise<void> {
+    // Get versions with provisioned concurrency
+    const versionsWithConcurrency = await this._getVersionsWithProvisionedConcurrency(func.name);
+
+    // Delete provisioned concurrency for all versions
+    for (const versionConfig of versionsWithConcurrency) {
+      const versionFromArn = this._extractVersionFromArn(versionConfig.FunctionArn);
+      if (versionFromArn) {
+        await this._deleteProvisionedConcurrency(func.name, versionFromArn);
+      }
+    }
+  }
+
+  /**
+   * Updates the provisioned concurrency settings for a specific Lambda function and version.
+   * Removes previous concurrency settings if the current provisioned concurrency is not defined.
+   *
+   * @param {FunctionWithConfig} func - The function object containing configuration, including name, version, and provisioned concurrency settings.
+   * @param {any} [state] - Optional state used during the provisioning process, such as tracking progress or handling additional context.
+   * @return {Promise<void>} A promise that resolves when the provisioned concurrency settings have been updated or removed.
    */
   private async _setProvisionedConcurrency(func: FunctionWithConfig, state?: any): Promise<void> {
+    // Check if the provisioned concurrency is empty (null, undefined, or 0)
+    const isEmpty =
+      func.config.provisioned === null || func.config.provisioned === undefined || func.config.provisioned === 0;
+
+    if (isEmpty) {
+      await this._manageEmptyConfiguration(func);
+      return;
+    }
+
     this._logInfo(
       `Setting provisioned concurrency for ${func.name}:${func.config.version} to ${func.config.provisioned}`
     );
@@ -469,6 +497,17 @@ class ProvisionedConcurrency {
     }
   }
 
+  /**
+   * Waits for the provisioned concurrency of a specific Lambda function version to become ready.
+   * This method continuously polls the status of the provisioned concurrency configuration
+   * until it reaches the "READY" state or a timeout occurs.
+   *
+   * @param {string} functionName - The name of the Lambda function for which to wait for provisioned concurrency.
+   * @param {string} version - The version of the Lambda function to check for provisioned concurrency readiness.
+   * @param {any} [state] - The optional state object that may include progress indicators for UI or logs.
+   * @return {Promise<void>} A promise that resolves when the provisioned concurrency becomes ready.
+   *                          Rejects if an error occurs or timeout is reached.
+   */
   private async _waitForProvisionedConcurrencyReady(functionName: string, version: string, state?: any): Promise<void> {
     const maxAttempts = 30; // 5-minute max wait
     const delayMs = 10000; // 10 seconds between checks
@@ -601,23 +640,17 @@ class ProvisionedConcurrency {
   }
 
   /**
-   * Gets functions configured for provisioned concurrency from serverless config
+   * Gets all functions from serverless config
    * @returns {Array<Object>}
    * @private
    */
   private _getConfiguredFunctions(): FunctionWithConfig[] {
     const functions = this.serverless.service.functions || {};
 
-    return Object.entries(functions)
-      .filter(
-        ([_, functionConfig]) =>
-          // Check for concurrency.provisioned configuration
-          functionConfig.concurrency?.provisioned !== undefined
-      )
-      .map(([name, functionConfig]) => ({
-        name,
-        config: this._normalizeConfig(functionConfig),
-      }));
+    return Object.entries(functions).map(([name, functionConfig]) => ({
+      name,
+      config: this._normalizeConfig(functionConfig),
+    }));
   }
 
   /**
