@@ -697,6 +697,8 @@ class ProvisionedConcurrency {
         FunctionName: functionName,
         Qualifier: version,
       });
+      
+      await this._deleteAliasesForVersion(functionName, version);
     } catch (error) {
       this._logError(
         `Error deleting provisioned concurrency for ${functionName}:${version}: ${(error as Error).message}`
@@ -805,6 +807,44 @@ class ProvisionedConcurrency {
         },
       }),
     };
+  }
+
+  /**
+   * Lists and deletes all aliases associated with a specific function version
+   * @param {string} functionName - Function name
+   * @param {string} version - Function version
+   * @returns {Promise<void>}
+   * @private
+   */
+  private async _deleteAliasesForVersion(functionName: string, version: string): Promise<void> {
+    try {
+      const response = await this.provider.request('Lambda', 'listAliases', {
+        FunctionName: functionName,
+        MaxItems: 100,
+      });
+
+      if (!response.Aliases || response.Aliases.length === 0) {
+        return;
+      }
+
+      const aliasesForVersion = response.Aliases.filter((alias: { FunctionVersion: string, Name: string }) => alias.FunctionVersion === version);
+      
+      if (aliasesForVersion.length === 0) {
+        return;
+      }
+
+      this._logInfo(`Found ${aliasesForVersion.length} aliases for ${functionName}:${version}`);
+      
+      for (const alias of aliasesForVersion) {
+        this._logInfo(`Deleting alias ${alias.Name} for ${functionName}:${version}`);
+        await this.provider.request('Lambda', 'deleteAlias', {
+          FunctionName: functionName,
+          Name: alias.Name,
+        });
+      }
+    } catch (error) {
+      this._logError(`Error deleting aliases for ${functionName}:${version}: ${(error as Error).message}`);
+    }
   }
 }
 
