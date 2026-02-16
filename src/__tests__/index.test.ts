@@ -1,15 +1,11 @@
 import * as os from 'os';
-import ProvisionedConcurrency from '../index';
+import ProvisionedConcurrency from '..';
 import MaximumConcurrencyError from '../exceptions/MaximumConcurrencyError';
 import NoVersionFoundError from '../exceptions/NoVersionFoundError';
 
 // Mock dependencies
 jest.mock('os');
-jest.mock('p-limit', () => {
-  return jest.fn(() => {
-    return (fn: Function) => fn();
-  });
-});
+jest.mock('p-limit', () => jest.fn(() => (fn: Function) => fn()));
 
 describe('ProvisionedConcurrency', () => {
   // Mock Serverless instance

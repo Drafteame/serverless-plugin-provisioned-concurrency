@@ -1,4 +1,4 @@
-import ProvisionedConcurrency from '../index';
+import ProvisionedConcurrency from '..';
 
 describe('Logger methods', () => {
   // Mock Serverless instance with CLI

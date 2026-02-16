@@ -1,4 +1,4 @@
-import ProvisionedConcurrency from '../index';
+import ProvisionedConcurrency from '..';
 
 describe('Function processing methods', () => {
   // Mock Serverless instance
