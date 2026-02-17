@@ -23,11 +23,17 @@ import {
  */
 class ProvisionedConcurrency {
   private serverless: Serverless;
+
   private options: ServerlessOptions;
+
   private log: Logger;
+
   private progress: Progress;
+
   private provider: ServerlessProvider;
+
   public readonly hooks: Record<string, () => Promise<void>>;
+
   public readonly commands: Record<string, any>;
 
   constructor(serverless: Serverless, options: ServerlessOptions, utils?: ServerlessUtils) {
@@ -137,7 +143,7 @@ class ProvisionedConcurrency {
     try {
       func.name = this._getFunctionName(func.name);
 
-      let version = func.config.version;
+      let { version } = func.config;
       if (!version || version === 'latest') {
         version = await this._getLatestVersion(func.name);
       }
@@ -218,7 +224,7 @@ class ProvisionedConcurrency {
       completedCount: 0,
       totalCount: 1,
       startTime: Date.now(),
-      updateMessage: function () {
+      updateMessage() {
         const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
         return `Setting provisioned concurrency for function ${functionName} (${this.completedCount}/${this.totalCount}) (${elapsedSeconds}s)`;
       },
@@ -272,12 +278,12 @@ class ProvisionedConcurrency {
     // Create a shared state object for tracking progress
     const state = {
       progress: this.progress.create({
-        message: 'Setting provisioned concurrency (0/' + functions.length + ') (0s)',
+        message: `Setting provisioned concurrency (0/${functions.length}) (0s)`,
       }),
       completedCount: 0,
       totalCount: functions.length,
       startTime: Date.now(),
-      updateMessage: function () {
+      updateMessage() {
         const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
         return `Setting provisioned concurrency (${this.completedCount}/${this.totalCount}) (${elapsedSeconds}s)`;
       },
@@ -340,7 +346,7 @@ class ProvisionedConcurrency {
 
     // Check if the function has reserved concurrency configured
     // If it does, ensure provisioned concurrency is at most maxPercent of reserved concurrency
-    const originalFunctionConfig = this.serverless.service.functions[name] as ServerlessFunction;
+    const originalFunctionConfig = this.serverless.service.functions[name];
     const maxPercent = this._getProvisionedConcurrencyPercent();
     const percentDisplay = Math.round(maxPercent * 100);
 
@@ -389,7 +395,7 @@ class ProvisionedConcurrency {
   private async _processFunction(func: FunctionWithConfig, state?: any): Promise<void> {
     func.name = this._getFunctionName(func.name);
 
-    let version = func.config.version;
+    let { version } = func.config;
 
     if (!version || version === 'latest') {
       version = await this._getLatestVersion(func.name);
@@ -455,7 +461,7 @@ class ProvisionedConcurrency {
     const versionsWithConcurrency = await this._getVersionsWithProvisionedConcurrency(functionName);
 
     // If other versions with provisioned concurrency exist, delete their concurrency
-    if (versionsWithConcurrency.length == 0) {
+    if (versionsWithConcurrency.length === 0) {
       return;
     }
 
@@ -731,9 +737,9 @@ class ProvisionedConcurrency {
     const reserved = functionConfig.reservedConcurrency || null;
 
     return <NormalizedFunctionConfig>{
-      reserved: reserved,
-      provisioned: provisioned,
-      version: version,
+      reserved,
+      provisioned,
+      version,
     };
   }
 
